@@ -11,6 +11,7 @@ from .object_validation_v1_5 import phase_capture, compare_phases, append_captur
 from .selection_discovery_v1_6 import capture as capture_v16, append as append_v16, compare as compare_v16, PHASES as PHASES_V16
 from .selected_object_v1_7 import inspect as inspect_v17
 from .selected_objects_v1_9 import capture as capture_v19, append as append_v19, compare as compare_v19, PHASES as PHASES_V19
+from .selected_objects_v2_0 import diagnose as diagnose_v20
 from .selected_objects_v1_8 import capture as capture_v18, append as append_v18, compare as compare_v18, PHASES as PHASES_V18
 from pathlib import Path
 from . import __version__
@@ -104,7 +105,30 @@ def main(argv: list[str] | None = None) -> int:
     c19 = commands.add_parser("compare-selected-v1-9", help="Comparar ordem de selecao 3+")
     c19.add_argument("--input", required=True)
     c19.add_argument("--output")
+    v20 = commands.add_parser("selected-v2-0", help="Consultar selecao de IDs conhecidos e procurar referencias locais")
+    v20.add_argument("--pid", type=int, required=True)
+    v20.add_argument("--ids", type=int, nargs="+", required=True)
+    v20.add_argument("--player-bytes", type=int, default=512)
+    v20.add_argument("--allow-candidates", action="store_true")
+    v20.add_argument("--output", help="Salvar JSON")
     args = parser.parse_args(argv)
+    if args.command == "selected-v2-0":
+        if not args.allow_candidates:
+            parser.error("v2.0 exige --allow-candidates")
+        try:
+            with WindowsProcessReader(args.pid) as reader:
+                api = HDObjectAPI(reader, mapping_dir(args.mapping_dir), allow_candidates=True)
+                result = diagnose_v20(api, args.ids, player_scan_bytes=args.player_bytes)
+            payload = json.dumps(result, indent=2, ensure_ascii=False)
+            if args.output:
+                Path(args.output).write_text(payload + "\n", encoding="utf-8")
+                print(f"Diagnostico gravado em {args.output}")
+            else:
+                print(payload)
+            return 0 if not result["errors"] else 2
+        except (ObjectAPIError, OSError, ValueError, TypeError) as exc:
+            print(f"ERRO selected-v2-0: {exc}")
+            return 1
     if args.command == "selected-v1-9":
         if not args.allow_candidates:
             parser.error("v1.9 exige --allow-candidates")
