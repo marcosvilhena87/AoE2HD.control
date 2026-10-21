@@ -6,6 +6,7 @@ from dataclasses import asdict
 from .object_api import HDObjectAPI, WindowsProcessReader, ObjectAPIError
 from .object_validation_v1_2 import scan_buildings
 from .object_validation_v1_3 import capture_series
+from .object_validation_v1_4 import capture_series as capture_v14
 from pathlib import Path
 from . import __version__
 from .catalog import CATALOGS, load_catalog, mapping_dir
@@ -39,7 +40,36 @@ def main(argv: list[str] | None = None) -> int:
     v13.add_argument("--positions", action="store_true", help="Ler X/Y candidatos 0x3C/0x40")
     v13.add_argument("--allow-candidates", action="store_true")
     v13.add_argument("--output", help="Arquivo JSON para evidencias; opcional")
+    v14 = commands.add_parser("objects-v1-4", help="Investigar referencias entre objetos HD")
+    v14.add_argument("--pid", type=int, required=True)
+    v14.add_argument("--start-id", type=int, default=2100)
+    v14.add_argument("--end-id", type=int, default=2300)
+    v14.add_argument("--samples", type=int, default=3)
+    v14.add_argument("--interval", type=float, default=2.0)
+    v14.add_argument("--pointer-window", type=lambda x: int(x, 0), default=0x100)
+    v14.add_argument("--no-positions", action="store_true")
+    v14.add_argument("--allow-candidates", action="store_true")
+    v14.add_argument("--output", help="Caminho de arquivo JSON de evidencia")
     args = parser.parse_args(argv)
+    if args.command == "objects-v1-4":
+        if not args.allow_candidates:
+            parser.error("v1.4 exige --allow-candidates")
+        try:
+            with WindowsProcessReader(args.pid) as reader:
+                api = HDObjectAPI(reader, mapping_dir(args.mapping_dir), allow_candidates=True)
+                result = capture_v14(api, args.start_id, args.end_id,
+                    samples=args.samples, interval=args.interval,
+                    pointer_window=args.pointer_window, positions=not args.no_positions)
+            payload = json.dumps(result, indent=2, ensure_ascii=False)
+            if args.output:
+                Path(args.output).write_text(payload + "\n", encoding="utf-8")
+                print(f"Evidencia gravada em {args.output}")
+            else:
+                print(payload)
+            return 0 if all(not sample["errors"] for sample in result["snapshots"]) else 2
+        except (ObjectAPIError, OSError, ValueError) as exc:
+            print(f"ERRO objects-v1-4: {exc}")
+            return 1
     if args.command == "objects-v1-3":
         if not args.allow_candidates:
             parser.error("v1.3 requer --allow-candidates")
