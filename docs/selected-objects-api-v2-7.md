@@ -21,3 +21,9 @@ python -m unittest discover -s tests -v
 - A ordem integra a comparação, logo reordenação sem troca de membros também é sinalizada.
 - Os offsets permanecem candidatos, sem alterações no catálogo canônico.
 - Testes unitários não substituem capturas reais na build `AoK HD.exe 5.8.INT` (x86); capturar após reinício e registrar hash SHA-256 do executável.
+
+## Capturas reais recebidas em 21/10/2026
+
+Seis JSON analisados: `clear=0`, `60=60`, `buildings=15`, `group_A=60`, `group_B=60` e `selected_v2_7.json=60`. Todos com `repeated_observations_agree`, 12 observações internas concordantes e zero anomalias registradas. Os grupos A e B possuem 46 IDs comuns e 14 exclusivos em cada grupo: identidades diferentes com contagens iguais, **entre execuções separadas**.
+
+**Não confundir**: a mudança de grupo entre arquivos prova distinção por identidade na análise offline, mas não comprova detecção de mudanças concorrentes **dentro** de uma execução. Ainda faltam experimento concorrente, reinício independente, hash da build e comprovação de cobertura global. Evidência detalhada registrada em [AoE2HD.mapping](https://github.com/marcosvilhena87/AoE2HD.mapping/blob/main/docs/evidencia_selecao_v2_7_2026-10-21.md). Arquivos JSON originais não estão versionados.
