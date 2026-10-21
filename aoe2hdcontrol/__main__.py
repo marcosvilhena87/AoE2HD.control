@@ -14,6 +14,7 @@ from .selected_objects_v1_9 import capture as capture_v19, append as append_v19,
 from .selected_objects_v2_0 import diagnose as diagnose_v20
 from .selected_objects_v2_1 import capture as capture_v21, append as append_v21, compare as compare_v21, PHASES as PHASES_V21
 from .selected_objects_v2_2 import enumerate_selected as enumerate_v22
+from .selected_objects_v2_3 import capture as capture_v23, append as append_v23, compare as compare_v23, PHASES as PHASES_V23
 from .selected_objects_v1_8 import capture as capture_v18, append as append_v18, compare as compare_v18, PHASES as PHASES_V18
 from pathlib import Path
 from . import __version__
@@ -128,7 +129,43 @@ def main(argv: list[str] | None = None) -> int:
     v22.add_argument("--max-entries", type=int, default=16)
     v22.add_argument("--allow-candidates", action="store_true")
     v22.add_argument("--output")
+    v23 = commands.add_parser("selected-v2-3", help="Capturar capacidade experimental de selecao")
+    v23.add_argument("--pid", type=int, required=True)
+    v23.add_argument("--phase", choices=PHASES_V23, required=True)
+    v23.add_argument("--session", required=True)
+    v23.add_argument("--max-entries", type=int, default=32)
+    v23.add_argument("--allow-candidates", action="store_true")
+    v23.add_argument("--output", required=True)
+    c23 = commands.add_parser("compare-selected-v2-3", help="Comparar capacidade e contadores candidatos")
+    c23.add_argument("--input", required=True)
+    c23.add_argument("--output")
     args = parser.parse_args(argv)
+    if args.command == "selected-v2-3":
+        if not args.allow_candidates:
+            parser.error("v2.3 exige --allow-candidates")
+        try:
+            with WindowsProcessReader(args.pid) as reader:
+                api = HDObjectAPI(reader, mapping_dir(args.mapping_dir), allow_candidates=True)
+                shot = capture_v23(api, args.phase, args.session, max_entries=args.max_entries)
+            series = append_v23(args.output, shot)
+            print(f"Captura {len(series)} fase={args.phase} salva em {args.output}")
+            return 0 if not shot["enumeration"]["anomalies"] else 2
+        except (ObjectAPIError, OSError, ValueError, TypeError, KeyError) as exc:
+            print(f"ERRO selected-v2-3: {exc}")
+            return 1
+    if args.command == "compare-selected-v2-3":
+        try:
+            result = compare_v23(json.loads(Path(args.input).read_text(encoding="utf-8")))
+            payload = json.dumps(result, indent=2, ensure_ascii=False)
+            if args.output:
+                Path(args.output).write_text(payload + "\n", encoding="utf-8")
+                print(f"Comparacao salva em {args.output}")
+            else:
+                print(payload)
+            return 0
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            print(f"ERRO compare-selected-v2-3: {exc}")
+            return 1
     if args.command == "selected-v2-2":
         if not args.allow_candidates:
             parser.error("v2.2 exige --allow-candidates")
