@@ -14,7 +14,7 @@ class CatalogTests(unittest.TestCase):
             root = Path(temp)
             path = root / CATALOGS["genie"]
             path.parent.mkdir(parents=True)
-            path.write_text("id,nome\\n83,aldeao\\n", encoding="utf-8")
+            path.write_text("id,nome\n83,aldeao\n", encoding="utf-8")
             self.assertEqual(load_catalog("genie", root), [{"id": "83", "nome": "aldeao"}])
 
     def test_unknown_catalog(self):
