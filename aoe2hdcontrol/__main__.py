@@ -10,6 +10,7 @@ from .object_validation_v1_4 import capture_series as capture_v14
 from .object_validation_v1_5 import phase_capture, compare_phases, append_capture, PHASES
 from .selection_discovery_v1_6 import capture as capture_v16, append as append_v16, compare as compare_v16, PHASES as PHASES_V16
 from .selected_object_v1_7 import inspect as inspect_v17
+from .selected_objects_v1_8 import capture as capture_v18, append as append_v18, compare as compare_v18, PHASES as PHASES_V18
 from pathlib import Path
 from . import __version__
 from .catalog import CATALOGS, load_catalog, mapping_dir
@@ -82,7 +83,43 @@ def main(argv: list[str] | None = None) -> int:
     v17.add_argument("--ids", type=int, nargs="+", required=True)
     v17.add_argument("--allow-candidates", action="store_true")
     v17.add_argument("--output", help="Arquivo JSON opcional")
+    v18 = commands.add_parser("selected-v1-8", help="Capturar selecao multipla por IDs conhecidos")
+    v18.add_argument("--pid", type=int, required=True)
+    v18.add_argument("--ids", type=int, nargs="+", required=True)
+    v18.add_argument("--phase", choices=PHASES_V18, required=True)
+    v18.add_argument("--session", required=True)
+    v18.add_argument("--output", required=True)
+    v18.add_argument("--allow-candidates", action="store_true")
+    c18 = commands.add_parser("compare-selected-v1-8", help="Comparar capturas de selecao")
+    c18.add_argument("--input", required=True)
+    c18.add_argument("--output")
     args = parser.parse_args(argv)
+    if args.command == "selected-v1-8":
+        if not args.allow_candidates:
+            parser.error("v1.8 exige --allow-candidates")
+        try:
+            with WindowsProcessReader(args.pid) as reader:
+                api = HDObjectAPI(reader, mapping_dir(args.mapping_dir), allow_candidates=True)
+                shot = capture_v18(api, args.ids, args.phase, args.session)
+            saved = append_v18(args.output, shot)
+            print(f"Captura {len(saved)} fase={args.phase} salva em {args.output}")
+            return 0 if not shot["observation"]["errors"] else 2
+        except (ObjectAPIError, OSError, ValueError, KeyError) as exc:
+            print(f"ERRO selected-v1-8: {exc}")
+            return 1
+    if args.command == "compare-selected-v1-8":
+        try:
+            result = compare_v18(json.loads(Path(args.input).read_text(encoding="utf-8")))
+            payload = json.dumps(result, ensure_ascii=False, indent=2)
+            if args.output:
+                Path(args.output).write_text(payload + "\n", encoding="utf-8")
+                print(f"Comparacao salva em {args.output}")
+            else:
+                print(payload)
+            return 0
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            print(f"ERRO compare-selected-v1-8: {exc}")
+            return 1
     if args.command == "selected-v1-7":
         if not args.allow_candidates:
             parser.error("v1.7 exige --allow-candidates")
