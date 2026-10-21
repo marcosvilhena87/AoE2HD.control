@@ -80,6 +80,14 @@ class WindowsProcessReader:
             raise ValueError("PID invalido")
         from ctypes import wintypes
         self._kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        self._kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        self._kernel.OpenProcess.restype = wintypes.HANDLE
+        self._kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+        self._kernel.CloseHandle.restype = wintypes.BOOL
+        self._kernel.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+        self._kernel.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+        self._kernel.ReadProcessMemory.argtypes = [wintypes.HANDLE, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t)]
+        self._kernel.ReadProcessMemory.restype = wintypes.BOOL
         self._handle = self._kernel.OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
         if not self._handle:
             raise ObjectAPIError(f"OpenProcess falhou: {ctypes.get_last_error()}")
@@ -92,6 +100,10 @@ class WindowsProcessReader:
                             ("ProccntUsage", wintypes.DWORD), ("modBaseAddr", ctypes.POINTER(ctypes.c_byte)),
                             ("modBaseSize", wintypes.DWORD), ("hModule", wintypes.HMODULE),
                             ("szModule", wintypes.WCHAR * 256), ("szExePath", wintypes.WCHAR * 260)]
+            self._kernel.Module32FirstW.argtypes = [wintypes.HANDLE, ctypes.POINTER(MODULEENTRY32W)]
+            self._kernel.Module32FirstW.restype = wintypes.BOOL
+            self._kernel.Module32NextW.argtypes = [wintypes.HANDLE, ctypes.POINTER(MODULEENTRY32W)]
+            self._kernel.Module32NextW.restype = wintypes.BOOL
             snap = self._kernel.CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, pid)
             if snap == INVALID_HANDLE_VALUE:
                 raise ObjectAPIError("Nao foi possivel inspecionar os modulos do processo")
