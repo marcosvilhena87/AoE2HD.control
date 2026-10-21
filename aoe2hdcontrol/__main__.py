@@ -9,6 +9,7 @@ from .object_validation_v1_3 import capture_series
 from .object_validation_v1_4 import capture_series as capture_v14
 from .object_validation_v1_5 import phase_capture, compare_phases, append_capture, PHASES
 from .selection_discovery_v1_6 import capture as capture_v16, append as append_v16, compare as compare_v16, PHASES as PHASES_V16
+from .selected_object_v1_7 import inspect as inspect_v17
 from pathlib import Path
 from . import __version__
 from .catalog import CATALOGS, load_catalog, mapping_dir
@@ -76,7 +77,29 @@ def main(argv: list[str] | None = None) -> int:
     cmp16 = commands.add_parser("compare-selection-v1-6", help="Comparar ciclos de selecao")
     cmp16.add_argument("--input", required=True)
     cmp16.add_argument("--output")
+    v17 = commands.add_parser("selected-v1-7", help="Inspecionar ponteiros e flags candidatos de selecao")
+    v17.add_argument("--pid", type=int, required=True)
+    v17.add_argument("--ids", type=int, nargs="+", required=True)
+    v17.add_argument("--allow-candidates", action="store_true")
+    v17.add_argument("--output", help="Arquivo JSON opcional")
     args = parser.parse_args(argv)
+    if args.command == "selected-v1-7":
+        if not args.allow_candidates:
+            parser.error("v1.7 exige --allow-candidates")
+        try:
+            with WindowsProcessReader(args.pid) as reader:
+                api = HDObjectAPI(reader, mapping_dir(args.mapping_dir), allow_candidates=True)
+                result = inspect_v17(api, args.ids)
+            payload = json.dumps(result, ensure_ascii=False, indent=2)
+            if args.output:
+                Path(args.output).write_text(payload + "\n", encoding="utf-8")
+                print(f"Captura gravada em {args.output}")
+            else:
+                print(payload)
+            return 0 if not result["errors"] else 2
+        except (ObjectAPIError, OSError, ValueError) as exc:
+            print(f"ERRO selected-v1-7: {exc}")
+            return 1
     if args.command == "selection-v1-6":
         if not args.allow_candidates:
             parser.error("v1.6 exige --allow-candidates")
