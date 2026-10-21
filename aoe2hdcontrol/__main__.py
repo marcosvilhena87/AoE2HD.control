@@ -50,7 +50,7 @@ def main(argv: list[str] | None = None) -> int:
                     samples=args.samples, interval=args.interval, positions=args.positions)
             payload = json.dumps(result, indent=2, ensure_ascii=False)
             if args.output:
-                Path(args.output).write_text(payload + "\\n", encoding="utf-8")
+                Path(args.output).write_text(payload + "\n", encoding="utf-8")
                 print(f"Evidencia gravada em {args.output}")
             else:
                 print(payload)
