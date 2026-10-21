@@ -21,6 +21,12 @@ python -m unittest discover -s tests -v
 
 O caminho do catálogo pode ser informado com `--mapping-dir "C:\caminho\AoE2HD.mapping"` ou variável `AOE2HD_MAPPING_DIR`.
 
+## Regra obrigatória para hipóteses e novas implementações
+
+Antes de testar hipóteses, investigar comportamentos ou implementar funcionalidades, **consultar sempre** as versões atuais de [AoE2HD.aoe2control](https://github.com/marcosvilhena87/AoE2HD.aoe2control) (referência funcional DE e matriz de compatibilidade HD) e [AoE2HD.mapping](https://github.com/marcosvilhena87/AoE2HD.mapping) (catálogo canônico e evidências), além do código existente neste repositório. Registrar diferenças, limites de validação, resultados e testes; descobertas de memória devem ser atualizadas primeiro no mapping, sem elevar candidatos a fatos comprovados.
+
+**Procedimento e checklist obrigatórios:** [docs/regra-desenvolvimento.md](docs/regra-desenvolvimento.md).
+
 ## Regras
 
 - O [AoE2HD.mapping](https://github.com/marcosvilhena87/AoE2HD.mapping) é a **única fonte de verdade** para IDs e endereços.
