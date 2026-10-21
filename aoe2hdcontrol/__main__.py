@@ -12,6 +12,7 @@ from .selection_discovery_v1_6 import capture as capture_v16, append as append_v
 from .selected_object_v1_7 import inspect as inspect_v17
 from .selected_objects_v1_9 import capture as capture_v19, append as append_v19, compare as compare_v19, PHASES as PHASES_V19
 from .selected_objects_v2_0 import diagnose as diagnose_v20
+from .selected_objects_v2_1 import capture as capture_v21, append as append_v21, compare as compare_v21, PHASES as PHASES_V21
 from .selected_objects_v1_8 import capture as capture_v18, append as append_v18, compare as compare_v18, PHASES as PHASES_V18
 from pathlib import Path
 from . import __version__
@@ -111,7 +112,43 @@ def main(argv: list[str] | None = None) -> int:
     v20.add_argument("--player-bytes", type=int, default=512)
     v20.add_argument("--allow-candidates", action="store_true")
     v20.add_argument("--output", help="Salvar JSON")
+    v21 = commands.add_parser("selected-v2-1", help="Capturar slots brutos de selecao no jogador")
+    v21.add_argument("--pid", type=int, required=True)
+    v21.add_argument("--ids", type=int, nargs="+", required=True)
+    v21.add_argument("--phase", choices=PHASES_V21, required=True)
+    v21.add_argument("--session", required=True)
+    v21.add_argument("--output", required=True)
+    v21.add_argument("--allow-candidates", action="store_true")
+    c21 = commands.add_parser("compare-selected-v2-1", help="Comparar slots de selecao por fase")
+    c21.add_argument("--input", required=True)
+    c21.add_argument("--output")
     args = parser.parse_args(argv)
+    if args.command == "selected-v2-1":
+        if not args.allow_candidates:
+            parser.error("v2.1 exige --allow-candidates")
+        try:
+            with WindowsProcessReader(args.pid) as reader:
+                api = HDObjectAPI(reader, mapping_dir(args.mapping_dir), allow_candidates=True)
+                shot = capture_v21(api, args.ids, args.phase, args.session)
+            series = append_v21(args.output, shot)
+            print(f"Captura {len(series)} fase={args.phase} salva em {args.output}")
+            return 0 if not shot["errors"] else 2
+        except (ObjectAPIError, OSError, ValueError, KeyError, TypeError) as exc:
+            print(f"ERRO selected-v2-1: {exc}")
+            return 1
+    if args.command == "compare-selected-v2-1":
+        try:
+            result = compare_v21(json.loads(Path(args.input).read_text(encoding="utf-8")))
+            payload = json.dumps(result, ensure_ascii=False, indent=2)
+            if args.output:
+                Path(args.output).write_text(payload + "\n", encoding="utf-8")
+                print(f"Comparacao salva em {args.output}")
+            else:
+                print(payload)
+            return 0
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            print(f"ERRO compare-selected-v2-1: {exc}")
+            return 1
     if args.command == "selected-v2-0":
         if not args.allow_candidates:
             parser.error("v2.0 exige --allow-candidates")
