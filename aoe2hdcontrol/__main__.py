@@ -5,6 +5,7 @@ import json
 from dataclasses import asdict
 from .object_api import HDObjectAPI, WindowsProcessReader, ObjectAPIError
 from .object_validation_v1_2 import scan_buildings
+from .object_validation_v1_3 import capture_series
 from pathlib import Path
 from . import __version__
 from .catalog import CATALOGS, load_catalog, mapping_dir
@@ -29,7 +30,34 @@ def main(argv: list[str] | None = None) -> int:
     scan.add_argument("--type", type=int, default=None, help="Filtro Genie opcional (ex.: 109)")
     scan.add_argument("--all-owners", action="store_true", help="Exibir tambem construcoes de outros jogadores")
     scan.add_argument("--allow-candidates", action="store_true")
+    v13 = commands.add_parser("objects-v1-3", help="Capturar tipos 109/618/619/620 em serie")
+    v13.add_argument("--pid", type=int, required=True)
+    v13.add_argument("--start-id", type=int, default=2100)
+    v13.add_argument("--end-id", type=int, default=2300)
+    v13.add_argument("--samples", type=int, default=3)
+    v13.add_argument("--interval", type=float, default=1.0)
+    v13.add_argument("--positions", action="store_true", help="Ler X/Y candidatos 0x3C/0x40")
+    v13.add_argument("--allow-candidates", action="store_true")
+    v13.add_argument("--output", help="Arquivo JSON para evidencias; opcional")
     args = parser.parse_args(argv)
+    if args.command == "objects-v1-3":
+        if not args.allow_candidates:
+            parser.error("v1.3 requer --allow-candidates")
+        try:
+            with WindowsProcessReader(args.pid) as reader:
+                api = HDObjectAPI(reader, mapping_dir(args.mapping_dir), allow_candidates=True)
+                result = capture_series(api, args.start_id, args.end_id,
+                    samples=args.samples, interval=args.interval, positions=args.positions)
+            payload = json.dumps(result, indent=2, ensure_ascii=False)
+            if args.output:
+                Path(args.output).write_text(payload + "\\n", encoding="utf-8")
+                print(f"Evidencia gravada em {args.output}")
+            else:
+                print(payload)
+            return 0 if all(not s["errors"] for s in result["samples"]) else 2
+        except (ObjectAPIError, OSError, ValueError) as exc:
+            print(f"ERRO objects-v1-3: {exc}")
+            return 1
     if args.command == "buildings-v1-2":
         if not args.allow_candidates:
             parser.error("Os campos de ID/tipo/proprietario sao candidatos; use --allow-candidates")
