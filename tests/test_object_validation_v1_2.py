@@ -1,14 +1,15 @@
 """Regressão offline para o scan v1.2."""
 import unittest
-from types import SimpleNamespace
+from aoe2hdcontrol.object_api import HDObject
 from unittest.mock import patch
 from aoe2hdcontrol.object_validation_v1_2 import scan_buildings
 from aoe2hdcontrol.object_api import ObjectAPIError
 
 
 def object_(oid, klass=3, typ=109, owner=0x200000):
-    return SimpleNamespace(object_id=oid, address=0x300000 + oid * 4,
-                           class_id=klass, genie_type_id=typ, owner_address=owner)
+    return HDObject(object_id=oid, address=0x300000 + oid * 4,
+                    class_id=klass, genie_type_id=typ, owner_address=owner,
+                    position=None, candidate_fields=())
 
 
 class Dummy:
