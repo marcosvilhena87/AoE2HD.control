@@ -171,7 +171,7 @@ def main(argv: list[str] | None = None) -> int:
                 result = inspect_v27(api)
             payload = json.dumps(result, indent=2, ensure_ascii=False)
             if args.output:
-                Path(args.output).write_text(payload + "\\n", encoding="utf-8")
+                Path(args.output).write_text(payload + "\n", encoding="utf-8")
                 print(f"Diagnostico v2.7 gravado em {args.output}")
             else:
                 print(payload)
