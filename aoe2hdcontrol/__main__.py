@@ -17,6 +17,7 @@ from .selected_objects_v2_2 import enumerate_selected as enumerate_v22
 from .selected_objects_v2_3 import capture as capture_v23, append as append_v23, compare as compare_v23, PHASES as PHASES_V23
 from .selected_objects_v2_4 import inspect_consistency as inspect_v24
 from .selected_objects_v2_5 import inspect_selection as inspect_v25
+from .selected_objects_v2_6 import inspect_selection as inspect_v26
 from .selected_objects_v1_8 import capture as capture_v18, append as append_v18, compare as compare_v18, PHASES as PHASES_V18
 from pathlib import Path
 from . import __version__
@@ -151,7 +152,28 @@ def main(argv: list[str] | None = None) -> int:
     v25.add_argument("--max-entries", type=int, default=64)
     v25.add_argument("--allow-candidates", action="store_true")
     v25.add_argument("--output")
+    v26 = commands.add_parser("selected-v2-6", help="Enumerar selecao usando contador candidato")
+    v26.add_argument("--pid", type=int, required=True)
+    v26.add_argument("--allow-candidates", action="store_true")
+    v26.add_argument("--output")
     args = parser.parse_args(argv)
+    if args.command == "selected-v2-6":
+        if not args.allow_candidates:
+            parser.error("v2.6 exige --allow-candidates")
+        try:
+            with WindowsProcessReader(args.pid) as reader:
+                api = HDObjectAPI(reader, mapping_dir(args.mapping_dir), allow_candidates=True)
+                result = inspect_v26(api)
+            payload = json.dumps(result, indent=2, ensure_ascii=False)
+            if args.output:
+                Path(args.output).write_text(payload + "\n", encoding="utf-8")
+                print(f"Diagnostico v2.6 gravado em {args.output}")
+            else:
+                print(payload)
+            return 0 if result["consistency"]=="consistent_with_candidate_count" else 2
+        except (ObjectAPIError, OSError, ValueError, TypeError) as exc:
+            print(f"ERRO selected-v2-6: {exc}")
+            return 1
     if args.command == "selected-v2-5":
         if not args.allow_candidates:
             parser.error("v2.5 exige --allow-candidates")
