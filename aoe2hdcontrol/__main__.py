@@ -13,6 +13,7 @@ from .selected_object_v1_7 import inspect as inspect_v17
 from .selected_objects_v1_9 import capture as capture_v19, append as append_v19, compare as compare_v19, PHASES as PHASES_V19
 from .selected_objects_v2_0 import diagnose as diagnose_v20
 from .selected_objects_v2_1 import capture as capture_v21, append as append_v21, compare as compare_v21, PHASES as PHASES_V21
+from .selected_objects_v2_2 import enumerate_selected as enumerate_v22
 from .selected_objects_v1_8 import capture as capture_v18, append as append_v18, compare as compare_v18, PHASES as PHASES_V18
 from pathlib import Path
 from . import __version__
@@ -122,7 +123,29 @@ def main(argv: list[str] | None = None) -> int:
     c21 = commands.add_parser("compare-selected-v2-1", help="Comparar slots de selecao por fase")
     c21.add_argument("--input", required=True)
     c21.add_argument("--output")
+    v22 = commands.add_parser("selected-v2-2", help="Enumerar selecao experimental por slots")
+    v22.add_argument("--pid", type=int, required=True)
+    v22.add_argument("--max-entries", type=int, default=16)
+    v22.add_argument("--allow-candidates", action="store_true")
+    v22.add_argument("--output")
     args = parser.parse_args(argv)
+    if args.command == "selected-v2-2":
+        if not args.allow_candidates:
+            parser.error("v2.2 exige --allow-candidates")
+        try:
+            with WindowsProcessReader(args.pid) as reader:
+                api = HDObjectAPI(reader, mapping_dir(args.mapping_dir), allow_candidates=True)
+                result = enumerate_v22(api, max_entries=args.max_entries)
+            payload = json.dumps(result, indent=2, ensure_ascii=False)
+            if args.output:
+                Path(args.output).write_text(payload + "\n", encoding="utf-8")
+                print(f"Enumeracao experimental gravada em {args.output}")
+            else:
+                print(payload)
+            return 0 if not result["anomalies"] else 2
+        except (ObjectAPIError, OSError, ValueError, TypeError) as exc:
+            print(f"ERRO selected-v2-2: {exc}")
+            return 1
     if args.command == "selected-v2-1":
         if not args.allow_candidates:
             parser.error("v2.1 exige --allow-candidates")
