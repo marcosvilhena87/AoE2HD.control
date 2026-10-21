@@ -4,6 +4,7 @@ import argparse
 import json
 from dataclasses import asdict
 from .object_api import HDObjectAPI, WindowsProcessReader, ObjectAPIError
+from .object_validation_v1_2 import scan_buildings
 from pathlib import Path
 from . import __version__
 from .catalog import CATALOGS, load_catalog, mapping_dir
@@ -21,7 +22,27 @@ def main(argv: list[str] | None = None) -> int:
     obj.add_argument("--id", type=int, required=True, help="Object ID da partida atual")
     obj.add_argument("--allow-candidates", action="store_true",
                      help="Aceitar offsets com estado hipotese/experimental; nao e validacao")
+    scan = commands.add_parser("buildings-v1-2", help="Investigar construcoes por Object ID e proprietario")
+    scan.add_argument("--pid", type=int, required=True)
+    scan.add_argument("--start-id", type=int, default=2100)
+    scan.add_argument("--end-id", type=int, default=2300)
+    scan.add_argument("--type", type=int, default=None, help="Filtro Genie opcional (ex.: 109)")
+    scan.add_argument("--all-owners", action="store_true", help="Exibir tambem construcoes de outros jogadores")
+    scan.add_argument("--allow-candidates", action="store_true")
     args = parser.parse_args(argv)
+    if args.command == "buildings-v1-2":
+        if not args.allow_candidates:
+            parser.error("Os campos de ID/tipo/proprietario sao candidatos; use --allow-candidates")
+        try:
+            with WindowsProcessReader(args.pid) as reader:
+                api = HDObjectAPI(reader, mapping_dir(args.mapping_dir), allow_candidates=True)
+                result = scan_buildings(api, args.start_id, args.end_id,
+                    only_local=not args.all_owners, target_type=args.type)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0 if not result["counters"]["read_errors"] else 2
+        except (ObjectAPIError, OSError, ValueError) as exc:
+            print(f"ERRO buildings-v1-2: {exc}")
+            return 1
     if args.command == "object":
         if not args.allow_candidates:
             parser.error("API de objeto depende de campos candidatos: use --allow-candidates conscientemente")
