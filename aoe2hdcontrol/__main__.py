@@ -7,6 +7,7 @@ from .object_api import HDObjectAPI, WindowsProcessReader, ObjectAPIError
 from .object_validation_v1_2 import scan_buildings
 from .object_validation_v1_3 import capture_series
 from .object_validation_v1_4 import capture_series as capture_v14
+from .object_validation_v1_5 import phase_capture, compare_phases, append_capture, PHASES
 from pathlib import Path
 from . import __version__
 from .catalog import CATALOGS, load_catalog, mapping_dir
@@ -50,7 +51,47 @@ def main(argv: list[str] | None = None) -> int:
     v14.add_argument("--no-positions", action="store_true")
     v14.add_argument("--allow-candidates", action="store_true")
     v14.add_argument("--output", help="Caminho de arquivo JSON de evidencia")
+    v15 = commands.add_parser("objects-v1-5", help="Registrar fase observada manualmente no jogo")
+    v15.add_argument("--pid", type=int, required=True)
+    v15.add_argument("--start-id", type=int, default=2100)
+    v15.add_argument("--end-id", type=int, default=2300)
+    v15.add_argument("--phase", choices=sorted(PHASES), required=True)
+    v15.add_argument("--session", required=True)
+    v15.add_argument("--output", required=True)
+    v15.add_argument("--no-positions", action="store_true")
+    v15.add_argument("--allow-candidates", action="store_true")
+    compare = commands.add_parser("compare-v1-5", help="Comparar capturas anotadas da mesma sessao")
+    compare.add_argument("--input", required=True)
+    compare.add_argument("--output", help="Salvar comparacao JSON")
     args = parser.parse_args(argv)
+    if args.command == "objects-v1-5":
+        if not args.allow_candidates:
+            parser.error("v1.5 exige --allow-candidates")
+        try:
+            with WindowsProcessReader(args.pid) as reader:
+                api = HDObjectAPI(reader, mapping_dir(args.mapping_dir), allow_candidates=True)
+                shot = phase_capture(api, args.start_id, args.end_id,
+                    phase=args.phase, session=args.session, positions=not args.no_positions)
+            series = append_capture(args.output, shot)
+            print(f"Captura {len(series)} registrada: {args.phase} -> {args.output}")
+            return 0 if not shot["capture"]["errors"] else 2
+        except (ObjectAPIError, OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
+            print(f"ERRO objects-v1-5: {exc}")
+            return 1
+    if args.command == "compare-v1-5":
+        try:
+            shots = json.loads(Path(args.input).read_text(encoding="utf-8"))
+            result = compare_phases(shots)
+            payload = json.dumps(result, ensure_ascii=False, indent=2)
+            if args.output:
+                Path(args.output).write_text(payload + "\n", encoding="utf-8")
+                print(f"Comparacao gravada em {args.output}")
+            else:
+                print(payload)
+            return 0 if all(t["complete"] for t in result["transitions"]) else 2
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            print(f"ERRO compare-v1-5: {exc}")
+            return 1
     if args.command == "objects-v1-4":
         if not args.allow_candidates:
             parser.error("v1.4 exige --allow-candidates")
