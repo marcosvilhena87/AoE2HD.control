@@ -8,6 +8,7 @@ from .object_validation_v1_2 import scan_buildings
 from .object_validation_v1_3 import capture_series
 from .object_validation_v1_4 import capture_series as capture_v14
 from .object_validation_v1_5 import phase_capture, compare_phases, append_capture, PHASES
+from .selection_discovery_v1_6 import capture as capture_v16, append as append_v16, compare as compare_v16, PHASES as PHASES_V16
 from pathlib import Path
 from . import __version__
 from .catalog import CATALOGS, load_catalog, mapping_dir
@@ -63,7 +64,47 @@ def main(argv: list[str] | None = None) -> int:
     compare = commands.add_parser("compare-v1-5", help="Comparar capturas anotadas da mesma sessao")
     compare.add_argument("--input", required=True)
     compare.add_argument("--output", help="Salvar comparacao JSON")
+    v16 = commands.add_parser("selection-v1-6", help="Captura diferencial limitada de selecao")
+    v16.add_argument("--pid", type=int, required=True)
+    v16.add_argument("--session", required=True)
+    v16.add_argument("--phase", required=True, choices=PHASES_V16)
+    v16.add_argument("--ids", type=int, nargs="+", required=True)
+    v16.add_argument("--object-bytes", type=int, default=256)
+    v16.add_argument("--player-bytes", type=int, default=512)
+    v16.add_argument("--allow-candidates", action="store_true")
+    v16.add_argument("--output", required=True)
+    cmp16 = commands.add_parser("compare-selection-v1-6", help="Comparar ciclos de selecao")
+    cmp16.add_argument("--input", required=True)
+    cmp16.add_argument("--output")
     args = parser.parse_args(argv)
+    if args.command == "selection-v1-6":
+        if not args.allow_candidates:
+            parser.error("v1.6 exige --allow-candidates")
+        try:
+            with WindowsProcessReader(args.pid) as reader:
+                api = HDObjectAPI(reader, mapping_dir(args.mapping_dir), allow_candidates=True)
+                shot = capture_v16(api, args.phase, args.session, args.ids,
+                    object_bytes=args.object_bytes, player_bytes=args.player_bytes)
+            series = append_v16(args.output, shot)
+            print(f"Captura {len(series)} fase={args.phase} registrada em {args.output}")
+            return 0 if not shot["errors"] else 2
+        except (OSError, ValueError, ObjectAPIError, KeyError) as exc:
+            print(f"ERRO selection-v1-6: {exc}")
+            return 1
+    if args.command == "compare-selection-v1-6":
+        try:
+            series = json.loads(Path(args.input).read_text(encoding="utf-8"))
+            result = compare_v16(series)
+            payload = json.dumps(result, indent=2, ensure_ascii=False)
+            if args.output:
+                Path(args.output).write_text(payload + "\n", encoding="utf-8")
+                print(f"Comparacao gravada em {args.output}")
+            else:
+                print(payload)
+            return 0 if not any(result["errors"]) else 2
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            print(f"ERRO compare-selection-v1-6: {exc}")
+            return 1
     if args.command == "objects-v1-5":
         if not args.allow_candidates:
             parser.error("v1.5 exige --allow-candidates")
