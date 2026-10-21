@@ -162,7 +162,7 @@ class HDObjectAPI:
             raise ObjectAPIError("Ponteiro nulo/invalido")
         try:
             return struct.unpack("<" + fmt, self.reader.read(addr, size))[0]
-        except (struct.error, OSError) as exc:
+        except (struct.error, OSError, KeyError) as exc:
             raise ObjectAPIError(f"Falha leitura em 0x{addr:08X}") from exc
 
     def _ptr(self, addr: int) -> int:
