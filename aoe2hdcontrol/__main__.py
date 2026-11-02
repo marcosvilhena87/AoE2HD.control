@@ -23,6 +23,7 @@ from .selected_objects_v2_8 import make_selection_intent, verify_selection
 from .selected_objects_v2_9 import evaluate_external_transition
 from .selection_investigation_v3_0 import investigate_manual_selection
 from .selection_coordinate_v3_1 import select_by_screen_point, DispatchGuardError
+from .selection_temporal_v3_1_1 import select_with_temporal_verification
 from .selected_objects_v1_8 import capture as capture_v18, append as append_v18, compare as compare_v18, PHASES as PHASES_V18
 from pathlib import Path
 from . import __version__
@@ -189,7 +190,32 @@ def main(argv: list[str] | None = None) -> int:
     v31.add_argument("--allow-candidates", action="store_true")
     v31.add_argument("--arm", action="store_true")
     v31.add_argument("--output", required=True)
+    v311 = commands.add_parser("select-screen-v3-1-1", help="Clique unico e verificacao temporal")
+    v311.add_argument("--pid", type=int, required=True)
+    v311.add_argument("--id", type=int, required=True)
+    v311.add_argument("--x", type=int, required=True)
+    v311.add_argument("--y", type=int, required=True)
+    v311.add_argument("--allow-candidates", action="store_true")
+    v311.add_argument("--arm", action="store_true")
+    v311.add_argument("--output", required=True)
     args = parser.parse_args(argv)
+    if args.command == "select-screen-v3-1-1":
+        if not args.allow_candidates or not args.arm:
+            parser.error("v3.1.1 exige --allow-candidates e --arm")
+        try:
+            import time
+            with WindowsProcessReader(args.pid) as reader:
+                api = HDObjectAPI(reader, mapping_dir(args.mapping_dir), allow_candidates=True)
+                print("Volte ao jogo AGORA; clique unico em 5 segundos.")
+                time.sleep(5)
+                result = select_with_temporal_verification(api, pid=args.pid,
+                    object_id=args.id, x=args.x, y=args.y, armed=True)
+            Path(args.output).write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            print(f"Resultado v3.1.1: {result['status']}; relatorio em {args.output}")
+            return 0 if result["match"] else 2
+        except (DispatchGuardError, ObjectAPIError, OSError, ValueError, TypeError) as exc:
+            print(f"ERRO select-screen-v3-1-1: {exc}")
+            return 1
     if args.command == "select-screen-v3-1":
         if not args.allow_candidates or not args.arm:
             parser.error("v3.1 exige --allow-candidates e --arm")
