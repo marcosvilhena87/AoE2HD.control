@@ -29,6 +29,7 @@ from .camera_projection_v3_3 import calibrate_projection, project
 from .projection_audit_v3_3_1 import audit_projection
 from .synchronized_calibration_v3_3_2 import synchronized_anchor, fit_and_holdout
 from .visual_correspondence_v3_3_3 import audit_aba
+from .assisted_visual_v3_3_4 import confirm_anchor, compare_recaptures
 from .selected_objects_v1_8 import capture as capture_v18, append as append_v18, compare as compare_v18, PHASES as PHASES_V18
 from pathlib import Path
 from . import __version__
@@ -233,7 +234,40 @@ def main(argv: list[str] | None = None) -> int:
     aba.add_argument("--output", required=True)
     aba.add_argument("--cursor-tolerance-px", type=float, default=15.0)
     aba.add_argument("--world-tolerance", type=float, default=0.02)
+    confirm = commands.add_parser("confirm-anchor-v3-3-4", help="Anotar confirmacao humana e geometria da janela")
+    confirm.add_argument("--anchor", required=True)
+    confirm.add_argument("--id", type=int, required=True)
+    confirm.add_argument("--operator-confirmed", action="store_true")
+    confirm.add_argument("--window-json", required=True)
+    confirm.add_argument("--output", required=True)
+    repeat = commands.add_parser("compare-assisted-v3-3-4", help="Conferir repetibilidade visual da mesma unidade")
+    repeat.add_argument("--first", required=True)
+    repeat.add_argument("--last", required=True)
+    repeat.add_argument("--output", required=True)
     args = parser.parse_args(argv)
+    if args.command == "confirm-anchor-v3-3-4":
+        try:
+            raw=json.loads(Path(args.anchor).read_text(encoding="utf-8-sig"))
+            window=json.loads(Path(args.window_json).read_text(encoding="utf-8-sig"))
+            result=confirm_anchor(raw,confirmed_id=args.id,
+                                  operator_confirmed=args.operator_confirmed,window=window)
+            Path(args.output).write_text(json.dumps(result,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+            print(f"Confirmacao assistida v3.3.4: {result['status']}; {args.output}")
+            return 0
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO confirm-anchor-v3-3-4: {exc}")
+            return 1
+    if args.command == "compare-assisted-v3-3-4":
+        try:
+            first=json.loads(Path(args.first).read_text(encoding="utf-8-sig"))
+            last=json.loads(Path(args.last).read_text(encoding="utf-8-sig"))
+            result=compare_recaptures(first,last)
+            Path(args.output).write_text(json.dumps(result,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+            print(f"Comparacao v3.3.4: {result['status']}; delta={result['cursor_distance_px']:.2f} px")
+            return 0
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO compare-assisted-v3-3-4: {exc}")
+            return 1
     if args.command == "audit-aba-v3-3-3":
         try:
             samples=[json.loads(Path(p).read_text(encoding="utf-8-sig"))
