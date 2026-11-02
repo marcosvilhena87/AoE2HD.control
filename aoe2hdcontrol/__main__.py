@@ -28,6 +28,7 @@ from .position_cursor_probe_v3_2 import capture_position_cursor_series
 from .camera_projection_v3_3 import calibrate_projection, project
 from .projection_audit_v3_3_1 import audit_projection
 from .synchronized_calibration_v3_3_2 import synchronized_anchor, fit_and_holdout
+from .visual_correspondence_v3_3_3 import audit_aba
 from .selected_objects_v1_8 import capture as capture_v18, append as append_v18, compare as compare_v18, PHASES as PHASES_V18
 from pathlib import Path
 from . import __version__
@@ -225,7 +226,26 @@ def main(argv: list[str] | None = None) -> int:
     fit332.add_argument("--anchors", nargs="+", required=True)
     fit332.add_argument("--holdout-id", type=int, nargs="+", required=True)
     fit332.add_argument("--output", required=True)
+    aba = commands.add_parser("audit-aba-v3-3-3", help="Auditoria A-B-A sem inferir movimento da camera")
+    aba.add_argument("--first", required=True)
+    aba.add_argument("--middle", required=True)
+    aba.add_argument("--last", required=True)
+    aba.add_argument("--output", required=True)
+    aba.add_argument("--cursor-tolerance-px", type=float, default=15.0)
+    aba.add_argument("--world-tolerance", type=float, default=0.02)
     args = parser.parse_args(argv)
+    if args.command == "audit-aba-v3-3-3":
+        try:
+            samples=[json.loads(Path(p).read_text(encoding="utf-8-sig"))
+                     for p in (args.first,args.middle,args.last)]
+            result=audit_aba(*samples,cursor_tolerance_px=args.cursor_tolerance_px,
+                             world_tolerance=args.world_tolerance)
+            Path(args.output).write_text(json.dumps(result,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+            print(f"Auditoria A-B-A v3.3.3: {result['status']}; delta cursor={result['cursor_delta_px']['distance']:.2f} px")
+            return 0
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO audit-aba-v3-3-3: {exc}")
+            return 1
     if args.command == "capture-anchor-v3-3-2":
         if not args.allow_candidates:
             parser.error("v3.3.2 exige --allow-candidates")
