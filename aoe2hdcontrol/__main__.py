@@ -19,6 +19,7 @@ from .selected_objects_v2_4 import inspect_consistency as inspect_v24
 from .selected_objects_v2_5 import inspect_selection as inspect_v25
 from .selected_objects_v2_6 import inspect_selection as inspect_v26
 from .selected_objects_v2_7 import inspect_selection as inspect_v27
+from .selected_objects_v2_8 import make_selection_intent, verify_selection
 from .selected_objects_v1_8 import capture as capture_v18, append as append_v18, compare as compare_v18, PHASES as PHASES_V18
 from pathlib import Path
 from . import __version__
@@ -161,7 +162,31 @@ def main(argv: list[str] | None = None) -> int:
     v27.add_argument("--pid", type=int, required=True)
     v27.add_argument("--allow-candidates", action="store_true")
     v27.add_argument("--output")
+    v28 = commands.add_parser("selected-v2-8", help="Verificar intenção de seleção por Object ID; sem enviar comandos")
+    v28.add_argument("--pid", type=int, required=True)
+    v28.add_argument("--ids", nargs="+", type=int, required=True)
+    v28.add_argument("--ordered", action="store_true")
+    v28.add_argument("--allow-candidates", action="store_true")
+    v28.add_argument("--output")
     args = parser.parse_args(argv)
+    if args.command == "selected-v2-8":
+        if not args.allow_candidates:
+            parser.error("v2.8 exige --allow-candidates")
+        try:
+            intent = make_selection_intent(args.ids)
+            with WindowsProcessReader(args.pid) as reader:
+                api = HDObjectAPI(reader, mapping_dir(args.mapping_dir), allow_candidates=True)
+                result = verify_selection(api, intent, ordered=args.ordered)
+            payload = json.dumps(result, indent=2, ensure_ascii=False)
+            if args.output:
+                Path(args.output).write_text(payload + "\n", encoding="utf-8")
+                print(f"Verificacao v2.8 gravada em {args.output}")
+            else:
+                print(payload)
+            return 0 if result["match"] else 2
+        except (ObjectAPIError, OSError, ValueError, TypeError) as exc:
+            print(f"ERRO selected-v2-8: {exc}")
+            return 1
     if args.command == "selected-v2-7":
         if not args.allow_candidates:
             parser.error("v2.7 exige --allow-candidates")
