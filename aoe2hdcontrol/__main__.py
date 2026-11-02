@@ -25,6 +25,9 @@ from .selection_investigation_v3_0 import investigate_manual_selection
 from .selection_coordinate_v3_1 import select_by_screen_point, DispatchGuardError
 from .selection_temporal_v3_1_1 import select_with_temporal_verification
 from .position_cursor_probe_v3_2 import capture_position_cursor_series
+from .camera_projection_v3_3 import calibrate_projection, project
+from .projection_audit_v3_3_1 import audit_projection
+from .synchronized_calibration_v3_3_2 import synchronized_anchor, fit_and_holdout
 from .selected_objects_v1_8 import capture as capture_v18, append as append_v18, compare as compare_v18, PHASES as PHASES_V18
 from pathlib import Path
 from . import __version__
@@ -206,7 +209,74 @@ def main(argv: list[str] | None = None) -> int:
     v32.add_argument("--interval", type=float, default=0.5)
     v32.add_argument("--allow-candidates", action="store_true")
     v32.add_argument("--output", required=True)
+    v33 = commands.add_parser("calibrate-projection-v3-3", help="Ajustar projecao empirica mundo -> cliente usando CSV de ancoras")
+    v33.add_argument("--csv", required=True)
+    v33.add_argument("--output", required=True)
+    v331 = commands.add_parser("audit-projection-v3-3-1", help="Validacao independente e geometria da projecao")
+    v331.add_argument("--calibration", required=True)
+    v331.add_argument("--holdouts", required=True)
+    v331.add_argument("--output", required=True)
+    v332 = commands.add_parser("capture-anchor-v3-3-2", help="Capturar cursor e unidade em janela temporal curta")
+    v332.add_argument("--pid", type=int, required=True)
+    v332.add_argument("--id", type=int, required=True)
+    v332.add_argument("--allow-candidates", action="store_true")
+    v332.add_argument("--output", required=True)
+    fit332 = commands.add_parser("fit-anchors-v3-3-2", help="Ajustar ancoras e validar em holdout")
+    fit332.add_argument("--anchors", nargs="+", required=True)
+    fit332.add_argument("--holdout-id", type=int, nargs="+", required=True)
+    fit332.add_argument("--output", required=True)
     args = parser.parse_args(argv)
+    if args.command == "capture-anchor-v3-3-2":
+        if not args.allow_candidates:
+            parser.error("v3.3.2 exige --allow-candidates")
+        try:
+            import time
+            with WindowsProcessReader(args.pid) as reader:
+                api = HDObjectAPI(reader, mapping_dir(args.mapping_dir), allow_candidates=True)
+                print("Em 5 segundos, mantenha o cursor PARADO sobre a unidade identificada.")
+                time.sleep(5)
+                result = synchronized_anchor(api,pid=args.pid,object_id=args.id)
+            Path(args.output).write_text(json.dumps(result,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+            print(f"Ancora v3.3.2: {result['status']}; {args.output}")
+            return 0 if result["usable"] else 2
+        except (ObjectAPIError,OSError,ValueError,TypeError) as exc:
+            print(f"ERRO capture-anchor-v3-3-2: {exc}")
+            return 1
+    if args.command == "fit-anchors-v3-3-2":
+        try:
+            anchors=[json.loads(Path(path).read_text(encoding="utf-8-sig")) for path in args.anchors]
+            result=fit_and_holdout(anchors,holdout_ids=args.holdout_id)
+            Path(args.output).write_text(json.dumps(result,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+            print(f"Fit v3.3.2: {result['status']}; RMSE={result['audit']['holdout_rmse_px']:.2f} px")
+            return 0 if result["status"]=="candidate_fit_passed_threshold" else 2
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO fit-anchors-v3-3-2: {exc}")
+            return 1
+    if args.command == "audit-projection-v3-3-1":
+        try:
+            import csv
+            calibration = json.loads(Path(args.calibration).read_text(encoding="utf-8-sig"))
+            with Path(args.holdouts).open(encoding="utf-8-sig",newline="") as fh:
+                holdouts = list(csv.DictReader(fh))
+            result = audit_projection(calibration, holdouts)
+            Path(args.output).write_text(json.dumps(result,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+            print(f"Auditoria v3.3.1: RMSE independente={result['holdout_rmse_px']:.2f} px; arquivo={args.output}")
+            return 0
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO audit-projection-v3-3-1: {exc}")
+            return 1
+    if args.command == "calibrate-projection-v3-3":
+        try:
+            import csv
+            with Path(args.csv).open(encoding="utf-8-sig",newline="") as fh:
+                pairs = list(csv.DictReader(fh))
+            result = calibrate_projection(pairs)
+            Path(args.output).write_text(json.dumps(result,indent=2,ensure_ascii=False) + "\n",encoding="utf-8")
+            print(f"Calibracao v3.3: RMSE={result['rmse_px']} px; arquivo={args.output}")
+            return 0
+        except (OSError,ValueError,TypeError) as exc:
+            print(f"ERRO calibrate-projection-v3-3: {exc}")
+            return 1
     if args.command == "probe-position-cursor-v3-2":
         if not args.allow_candidates:
             parser.error("v3.2 exige --allow-candidates")
