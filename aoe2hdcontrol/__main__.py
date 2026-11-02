@@ -24,6 +24,7 @@ from .selected_objects_v2_9 import evaluate_external_transition
 from .selection_investigation_v3_0 import investigate_manual_selection
 from .selection_coordinate_v3_1 import select_by_screen_point, DispatchGuardError
 from .selection_temporal_v3_1_1 import select_with_temporal_verification
+from .position_cursor_probe_v3_2 import capture_position_cursor_series
 from .selected_objects_v1_8 import capture as capture_v18, append as append_v18, compare as compare_v18, PHASES as PHASES_V18
 from pathlib import Path
 from . import __version__
@@ -198,7 +199,31 @@ def main(argv: list[str] | None = None) -> int:
     v311.add_argument("--allow-candidates", action="store_true")
     v311.add_argument("--arm", action="store_true")
     v311.add_argument("--output", required=True)
+    v32 = commands.add_parser("probe-position-cursor-v3-2", help="Comparar posicao candidata da unidade com cursor do Windows")
+    v32.add_argument("--pid", type=int, required=True)
+    v32.add_argument("--id", type=int, required=True)
+    v32.add_argument("--samples", type=int, default=12)
+    v32.add_argument("--interval", type=float, default=0.5)
+    v32.add_argument("--allow-candidates", action="store_true")
+    v32.add_argument("--output", required=True)
     args = parser.parse_args(argv)
+    if args.command == "probe-position-cursor-v3-2":
+        if not args.allow_candidates:
+            parser.error("v3.2 exige --allow-candidates")
+        try:
+            with WindowsProcessReader(args.pid) as reader:
+                api = HDObjectAPI(reader, mapping_dir(args.mapping_dir), allow_candidates=True)
+                print("Volte ao jogo; movimente o cursor e a unidade durante as amostras.")
+                import time
+                time.sleep(5)
+                result = capture_position_cursor_series(api, pid=args.pid,
+                    object_id=args.id, samples=args.samples, interval=args.interval)
+            Path(args.output).write_text(json.dumps(result,indent=2,ensure_ascii=False) + "\n",encoding="utf-8")
+            print(f"Relatorio v3.2 salvo em {args.output}")
+            return 0
+        except (ObjectAPIError, OSError, ValueError, TypeError) as exc:
+            print(f"ERRO probe-position-cursor-v3-2: {exc}")
+            return 1
     if args.command == "select-screen-v3-1-1":
         if not args.allow_candidates or not args.arm:
             parser.error("v3.1.1 exige --allow-candidates e --arm")
