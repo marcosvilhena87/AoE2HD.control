@@ -26,6 +26,7 @@ from .selection_coordinate_v3_1 import select_by_screen_point, DispatchGuardErro
 from .selection_temporal_v3_1_1 import select_with_temporal_verification
 from .position_cursor_probe_v3_2 import capture_position_cursor_series
 from .camera_projection_v3_3 import calibrate_projection, project
+from .projection_audit_v3_3_1 import audit_projection
 from .selected_objects_v1_8 import capture as capture_v18, append as append_v18, compare as compare_v18, PHASES as PHASES_V18
 from pathlib import Path
 from . import __version__
@@ -210,7 +211,24 @@ def main(argv: list[str] | None = None) -> int:
     v33 = commands.add_parser("calibrate-projection-v3-3", help="Ajustar projecao empirica mundo -> cliente usando CSV de ancoras")
     v33.add_argument("--csv", required=True)
     v33.add_argument("--output", required=True)
+    v331 = commands.add_parser("audit-projection-v3-3-1", help="Validacao independente e geometria da projecao")
+    v331.add_argument("--calibration", required=True)
+    v331.add_argument("--holdouts", required=True)
+    v331.add_argument("--output", required=True)
     args = parser.parse_args(argv)
+    if args.command == "audit-projection-v3-3-1":
+        try:
+            import csv
+            calibration = json.loads(Path(args.calibration).read_text(encoding="utf-8-sig"))
+            with Path(args.holdouts).open(encoding="utf-8-sig",newline="") as fh:
+                holdouts = list(csv.DictReader(fh))
+            result = audit_projection(calibration, holdouts)
+            Path(args.output).write_text(json.dumps(result,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+            print(f"Auditoria v3.3.1: RMSE independente={result['holdout_rmse_px']:.2f} px; arquivo={args.output}")
+            return 0
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO audit-projection-v3-3-1: {exc}")
+            return 1
     if args.command == "calibrate-projection-v3-3":
         try:
             import csv
