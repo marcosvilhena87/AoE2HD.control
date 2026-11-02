@@ -20,6 +20,7 @@ from .selected_objects_v2_5 import inspect_selection as inspect_v25
 from .selected_objects_v2_6 import inspect_selection as inspect_v26
 from .selected_objects_v2_7 import inspect_selection as inspect_v27
 from .selected_objects_v2_8 import make_selection_intent, verify_selection
+from .selected_objects_v2_9 import evaluate_external_transition
 from .selected_objects_v1_8 import capture as capture_v18, append as append_v18, compare as compare_v18, PHASES as PHASES_V18
 from pathlib import Path
 from . import __version__
@@ -168,7 +169,28 @@ def main(argv: list[str] | None = None) -> int:
     v28.add_argument("--ordered", action="store_true")
     v28.add_argument("--allow-candidates", action="store_true")
     v28.add_argument("--output")
+    v29 = commands.add_parser("compare-selected-v2-9", help="Auditar transicao manual entre snapshots v2.7; nao envia comandos")
+    v29.add_argument("--before", required=True)
+    v29.add_argument("--after", required=True)
+    v29.add_argument("--ids", nargs="+", type=int, required=True)
+    v29.add_argument("--output")
     args = parser.parse_args(argv)
+    if args.command == "compare-selected-v2-9":
+        try:
+            intent = make_selection_intent(args.ids)
+            before = json.loads(Path(args.before).read_text(encoding="utf-8"))
+            after = json.loads(Path(args.after).read_text(encoding="utf-8"))
+            result = evaluate_external_transition(intent, before, after)
+            payload = json.dumps(result, indent=2, ensure_ascii=False)
+            if args.output:
+                Path(args.output).write_text(payload + "\n", encoding="utf-8")
+                print(f"Comparacao v2.9 gravada em {args.output}")
+            else:
+                print(payload)
+            return 0 if result["status"] == "external_transition_observed" else 2
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            print(f"ERRO compare-selected-v2-9: {exc}")
+            return 1
     if args.command == "selected-v2-8":
         if not args.allow_candidates:
             parser.error("v2.8 exige --allow-candidates")
