@@ -21,6 +21,7 @@ from .selected_objects_v2_6 import inspect_selection as inspect_v26
 from .selected_objects_v2_7 import inspect_selection as inspect_v27
 from .selected_objects_v2_8 import make_selection_intent, verify_selection
 from .selected_objects_v2_9 import evaluate_external_transition
+from .selection_investigation_v3_0 import investigate_manual_selection
 from .selected_objects_v1_8 import capture as capture_v18, append as append_v18, compare as compare_v18, PHASES as PHASES_V18
 from pathlib import Path
 from . import __version__
@@ -174,7 +175,30 @@ def main(argv: list[str] | None = None) -> int:
     v29.add_argument("--after", required=True)
     v29.add_argument("--ids", nargs="+", type=int, required=True)
     v29.add_argument("--output")
+    v30 = commands.add_parser("investigate-selection-v3-0", help="Capturar antes/depois de seleção MANUAL no mesmo processo")
+    v30.add_argument("--pid", type=int, required=True)
+    v30.add_argument("--ids", nargs="+", type=int, required=True)
+    v30.add_argument("--allow-candidates", action="store_true")
+    v30.add_argument("--output", required=True)
     args = parser.parse_args(argv)
+    if args.command == "investigate-selection-v3-0":
+        if not args.allow_candidates:
+            parser.error("v3.0 exige --allow-candidates")
+        try:
+            with WindowsProcessReader(args.pid) as reader:
+                api = HDObjectAPI(reader, mapping_dir(args.mapping_dir), allow_candidates=True)
+                def manual_pause():
+                    print("Captura ANTES concluida. Selecione MANUALMENTE o alvo no jogo; volte aqui.")
+                    input("Pressione Enter para realizar a captura DEPOIS: ")
+                result = investigate_manual_selection(api, args.ids,
+                    pause_for_manual_action=manual_pause, pid=args.pid)
+            Path(args.output).write_text(
+                json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            print(f"Investigacao v3.0 gravada em {args.output}; status={result['status']}")
+            return 0 if result["status"] == "external_transition_observed" else 2
+        except (ObjectAPIError, OSError, ValueError, TypeError, EOFError) as exc:
+            print(f"ERRO investigate-selection-v3-0: {exc}")
+            return 1
     if args.command == "compare-selected-v2-9":
         try:
             intent = make_selection_intent(args.ids)
