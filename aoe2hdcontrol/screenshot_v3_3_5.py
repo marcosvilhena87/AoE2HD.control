@@ -65,7 +65,10 @@ def screenshot_client(pid, destination):
         info.header.size=ctypes.sizeof(BMIHEADER)
         info.header.width=w;info.header.height=h
         info.header.planes=1;info.header.bitcount=24
-        if g.GetDIBits(mem,bmp,0,h,data,ctypes.byref(info),0)!=h:
+        # GetDIBits requires the bitmap to be deselected from its DC.
+        g.SelectObject(mem,old)
+        old=None
+        if g.GetDIBits(source,bmp,0,h,data,ctypes.byref(info),0)!=h:
             raise OSError("GetDIBits failed")
         payload=bytes(data)
         offset=14+40
