@@ -25,6 +25,7 @@ from .selection_investigation_v3_0 import investigate_manual_selection
 from .selection_coordinate_v3_1 import select_by_screen_point, DispatchGuardError
 from .selection_temporal_v3_1_1 import select_with_temporal_verification
 from .position_cursor_probe_v3_2 import capture_position_cursor_series
+from .camera_projection_v3_3 import calibrate_projection, project
 from .selected_objects_v1_8 import capture as capture_v18, append as append_v18, compare as compare_v18, PHASES as PHASES_V18
 from pathlib import Path
 from . import __version__
@@ -206,7 +207,22 @@ def main(argv: list[str] | None = None) -> int:
     v32.add_argument("--interval", type=float, default=0.5)
     v32.add_argument("--allow-candidates", action="store_true")
     v32.add_argument("--output", required=True)
+    v33 = commands.add_parser("calibrate-projection-v3-3", help="Ajustar projecao empirica mundo -> cliente usando CSV de ancoras")
+    v33.add_argument("--csv", required=True)
+    v33.add_argument("--output", required=True)
     args = parser.parse_args(argv)
+    if args.command == "calibrate-projection-v3-3":
+        try:
+            import csv
+            with Path(args.csv).open(encoding="utf-8-sig",newline="") as fh:
+                pairs = list(csv.DictReader(fh))
+            result = calibrate_projection(pairs)
+            Path(args.output).write_text(json.dumps(result,indent=2,ensure_ascii=False) + "\n",encoding="utf-8")
+            print(f"Calibracao v3.3: RMSE={result['rmse_px']} px; arquivo={args.output}")
+            return 0
+        except (OSError,ValueError,TypeError) as exc:
+            print(f"ERRO calibrate-projection-v3-3: {exc}")
+            return 1
     if args.command == "probe-position-cursor-v3-2":
         if not args.allow_candidates:
             parser.error("v3.2 exige --allow-candidates")
