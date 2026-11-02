@@ -30,6 +30,7 @@ from .projection_audit_v3_3_1 import audit_projection
 from .synchronized_calibration_v3_3_2 import synchronized_anchor, fit_and_holdout
 from .visual_correspondence_v3_3_3 import audit_aba
 from .assisted_visual_v3_3_4 import confirm_anchor, compare_recaptures
+from .screenshot_v3_3_5 import screenshot_client
 from .selected_objects_v1_8 import capture as capture_v18, append as append_v18, compare as compare_v18, PHASES as PHASES_V18
 from pathlib import Path
 from . import __version__
@@ -244,7 +245,61 @@ def main(argv: list[str] | None = None) -> int:
     repeat.add_argument("--first", required=True)
     repeat.add_argument("--last", required=True)
     repeat.add_argument("--output", required=True)
+    visual = commands.add_parser("capture-anchor-v3-3-5", help="Atraso configuravel, ancora e imagem BMP da area cliente")
+    visual.add_argument("--pid", type=int, required=True)
+    visual.add_argument("--id", type=int, required=True)
+    visual.add_argument("--delay", type=float, default=15.0)
+    visual.add_argument("--allow-candidates", action="store_true")
+    visual.add_argument("--output", required=True)
+    visual.add_argument("--image", help="Caminho BMP (padrao: mesmo nome do JSON)")
     args = parser.parse_args(argv)
+    if args.command == "capture-anchor-v3-3-5":
+        if not args.allow_candidates:
+            parser.error("v3.3.5 exige --allow-candidates")
+        if not 0 <= args.delay <= 120:
+            parser.error("--delay deve estar entre 0 e 120 segundos")
+        try:
+            import time
+            from datetime import datetime, timezone
+            from .position_cursor_probe_v3_2 import read_cursor_coordinates
+            image_path = Path(args.image) if args.image else Path(args.output).with_suffix(".bmp")
+            if image_path.resolve() == Path(args.output).resolve():
+                raise ValueError("image and JSON paths must differ")
+            print(f"Volte ao jogo e posicione cursor sobre a base da unidade {args.id}; captura em {args.delay:g} s.",flush=True)
+            time.sleep(args.delay)
+            with WindowsProcessReader(args.pid) as reader:
+                api=HDObjectAPI(reader,mapping_dir(args.mapping_dir),allow_candidates=True)
+                anchor=synchronized_anchor(api,pid=args.pid,object_id=args.id)
+                before_image=read_cursor_coordinates(args.pid)
+                image_meta=None
+                image_error=None
+                try:
+                    image_meta=screenshot_client(args.pid,image_path)
+                except (OSError,ValueError) as exc:
+                    image_error=str(exc)
+                after_image=read_cursor_coordinates(args.pid)
+            stable_image=(before_image.get("game_foreground") is True
+                          and after_image.get("game_foreground") is True
+                          and before_image.get("client")==after_image.get("client")
+                          and anchor["cursor_after"].get("client")==before_image.get("client"))
+            usable=bool(anchor["usable"] and stable_image and image_meta is not None)
+            report={"schema":"hd-visual-evidence-v3.3.5",
+                    "timestamp_utc":datetime.now(timezone.utc).isoformat(),
+                    "pid":args.pid,"object_id":args.id,"delay_seconds":args.delay,
+                    "anchor":anchor,"cursor_before_image":before_image,
+                    "cursor_after_image":after_image,
+                    "image":image_meta,"image_error":image_error,
+                    "cursor_stable_across_image":stable_image,
+                    "status":"candidate_visual_evidence" if usable else "inconclusive",
+                    "visual_object_correspondence":"unverified",
+                    "camera_movement":"unknown","dispatch":"not_dispatched",
+                    "note":"Image follows anchor; not atomic. Visually inspect BMP; cursor may not be drawn in GDI screenshot."}
+            Path(args.output).write_text(json.dumps(report,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+            print(f"Evidencia v3.3.5: {report['status']}; JSON={args.output}; BMP={image_path if image_meta else 'indisponivel'}")
+            return 0 if usable else 2
+        except (OSError,ValueError,TypeError,ObjectAPIError) as exc:
+            print(f"ERRO capture-anchor-v3-3-5: {exc}")
+            return 1
     if args.command == "confirm-anchor-v3-3-4":
         try:
             raw=json.loads(Path(args.anchor).read_text(encoding="utf-8-sig"))
