@@ -29,6 +29,6 @@ class Tests(unittest.TestCase):
     def test_invalid_arguments(self):
         for kwargs in ({"pid":0},{"samples":0},{"samples":61},{"interval":0},{"object_id":True}):
             with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
-                capture_position_cursor_series(API(),pid=22,object_id=2630,
-                    cursor_reader=lambda p:None,sleep=lambda n:None,**kwargs)
+                capture_position_cursor_series(API(),cursor_reader=lambda p:None,
+                    sleep=lambda n:None,**({"pid":22,"object_id":2630}|kwargs))
 if __name__=="__main__":unittest.main()
