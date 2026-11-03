@@ -326,7 +326,64 @@ def main(argv: list[str] | None = None) -> int:
     guarded_batch.add_argument("--min-samples", type=int, default=10)
     guarded_batch.add_argument("--threshold-px", type=float, default=25.0)
     guarded_batch.add_argument("--output", required=True)
+    bindcam = commands.add_parser("bind-calibration-camera-v3-3-14", help="Vincular fit e BMP de referencia por SHA-256")
+    bindcam.add_argument("--fit", required=True)
+    bindcam.add_argument("--reference", required=True)
+    bindcam.add_argument("--provenance", required=True, choices=["contemporaneous_operator_attested","legacy_unverified"])
+    bindcam.add_argument("--note", default="")
+    bindcam.add_argument("--output", required=True)
+    bound = commands.add_parser("project-camera-bound-v3-3-14", help="Projecao com camera de calibracao vinculada")
+    bound.add_argument("--capture", required=True)
+    bound.add_argument("--fit", required=True)
+    bound.add_argument("--binding", required=True)
+    bound.add_argument("--calibration-reference", required=True)
+    bound.add_argument("--client-width", type=int, required=True)
+    bound.add_argument("--client-height", type=int, required=True)
+    bound.add_argument("--threshold-px", type=float, default=25.0)
+    bound.add_argument("--output", required=True)
+    bound.add_argument("--overlay", required=True)
     args = parser.parse_args(argv)
+    if args.command == "bind-calibration-camera-v3-3-14":
+        from .calibration_camera_v3_3_14 import bind_calibration
+        try:
+            sources={Path(args.fit).resolve(),Path(args.reference).resolve()}
+            if Path(args.output).resolve() in sources or Path(args.output).exists():
+                raise ValueError("output_overlaps_input_or_exists")
+            result=bind_calibration(args.fit,args.reference,
+                provenance=args.provenance,operator_note=args.note)
+            Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            print(f"Vinculo v3.3.14: {result['verification']}; {args.output}")
+            return 0
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO bind-calibration-camera-v3-3-14: {exc}")
+            return 1
+    if args.command == "project-camera-bound-v3-3-14":
+        from .calibration_camera_v3_3_14 import camera_bound_projection,render_overlay
+        try:
+            capture=json.loads(Path(args.capture).read_text(encoding="utf-8-sig"))
+            fit=json.loads(Path(args.fit).read_text(encoding="utf-8-sig"))
+            binding=json.loads(Path(args.binding).read_text(encoding="utf-8-sig"))
+            reference=capture.get("reference_image")
+            before=(capture.get("before_image") or {}).get("path")
+            if not reference or not before:
+                raise ValueError("capture_missing_reference_or_pre_image")
+            paths=[args.capture,args.fit,args.binding,args.calibration_reference,reference,before]
+            outputs={Path(args.output).resolve(),Path(args.overlay).resolve()}
+            if len(outputs)!=2 or outputs.intersection({Path(p).resolve() for p in paths}) or any(p.exists() for p in outputs):
+                raise ValueError("outputs_overlap_input_or_exist")
+            report=camera_bound_projection(capture,fit,binding,fit_path=args.fit,
+                reference_path=args.calibration_reference,capture_reference_path=reference,
+                capture_before_path=before,client_width=args.client_width,
+                client_height=args.client_height,threshold_px=args.threshold_px)
+            # Even blocked reports get a visual overlay for human diagnosis.
+            overlay=render_overlay(report,before,args.overlay)
+            report["overlay"]=overlay
+            Path(args.output).write_text(json.dumps(report,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            print(f"Camera/calibracao v3.3.14: {report['status']}; erro={report['error_px']}; {args.output}; {args.overlay}")
+            return 0 if report["status"]=="candidate_bound_projection" else 2
+        except (OSError,ValueError,TypeError,KeyError,RuntimeError,ImportError) as exc:
+            print(f"ERRO project-camera-bound-v3-3-14: {exc}")
+            return 1
     if args.command == "project-guarded-v3-3-13":
         from .guarded_projection_v3_3_13 import project_guarded
         try:
