@@ -165,6 +165,12 @@ def audit_repeat(first,second,*,first_capture,second_capture,
             reasons.append("screenshot_hash_mismatch")
         if cap.get("pid")!=review.get("pid") or cap.get("object_id")!=review.get("object_id"):
             reasons.append("review_identity_mismatch")
+        reference=cap.get("reference_image")
+        if (not reference or
+                Path(reference).resolve()!=Path(review.get("reference_image","")).resolve() or
+                not Path(reference).is_file() or
+                sha256_file(reference)!=review.get("reference_sha256")):
+            reasons.append("reference_hash_mismatch")
     if first.get("capture_sha256")==second.get("capture_sha256") or (
             Path(first.get("capture_file","")).resolve()==Path(second.get("capture_file","")).resolve()):
         reasons.append("captures_not_independent")
