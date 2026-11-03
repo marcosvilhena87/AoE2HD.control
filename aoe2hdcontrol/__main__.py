@@ -276,7 +276,23 @@ def main(argv: list[str] | None = None) -> int:
     residual.add_argument("--threshold-px", type=float, default=25.0)
     residual.add_argument("--output", required=True)
     residual.add_argument("--svg", required=True, help="Mapa vetorial dos vetores de erro")
+    review = commands.add_parser("review-correspondence-v3-3-9", help="Revisao visual manual e residuos robustos offline")
+    review.add_argument("--audit", required=True, help="JSON v3.3.8")
+    review.add_argument("--reviews", required=True, help="Manifesto de revisao manual JSON")
+    review.add_argument("--output", required=True)
     args = parser.parse_args(argv)
+    if args.command == "review-correspondence-v3-3-9":
+        from .correspondence_review_v3_3_9 import review_audit
+        try:
+            audit=json.loads(Path(args.audit).read_text(encoding="utf-8-sig"))
+            labels=json.loads(Path(args.reviews).read_text(encoding="utf-8-sig"))
+            result=review_audit(audit,labels)
+            Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            print(f"Revisao v3.3.9: observacoes={result['all_observations']['n']}; elegiveis={result['review_eligible_only']['n']}; pendentes={result['flagged_or_unreviewed']['n']}; {args.output}")
+            return 0
+        except (OSError,ValueError,KeyError,TypeError) as exc:
+            print(f"ERRO review-correspondence-v3-3-9: {exc}")
+            return 1
     if args.command == "audit-residuals-v3-3-8":
         from .residual_audit_v3_3_8 import audit_residuals, render_svg
         try:
