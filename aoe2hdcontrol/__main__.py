@@ -280,7 +280,46 @@ def main(argv: list[str] | None = None) -> int:
     review.add_argument("--audit", required=True, help="JSON v3.3.8")
     review.add_argument("--reviews", required=True, help="Manifesto de revisao manual JSON")
     review.add_argument("--output", required=True)
+    camera = commands.add_parser("check-camera-v3-3-10", help="Detectar deslocamento entre dois BMPs por marcos estaticos")
+    camera.add_argument("--before", required=True)
+    camera.add_argument("--after", required=True)
+    camera.add_argument("--anchors", required=True, help="JSON com lista de coordenadas de terreno estatico")
+    camera.add_argument("--search-px", type=int, default=60)
+    camera.add_argument("--output", required=True)
+    guarded = commands.add_parser("gate-camera-v3-3-10", help="Bloqueio conservador do lote segundo a camera")
+    guarded.add_argument("--camera", required=True)
+    guarded.add_argument("--batch", required=True)
+    guarded.add_argument("--output", required=True)
     args = parser.parse_args(argv)
+    if args.command == "check-camera-v3-3-10":
+        from .camera_guard_v3_3_10 import detect_camera_motion
+        try:
+            from PIL import Image
+            marks=json.loads(Path(args.anchors).read_text(encoding="utf-8-sig"))
+            if not isinstance(marks,list):
+                raise ValueError("anchors must be a JSON list")
+            with Image.open(args.before) as left, Image.open(args.after) as right:
+                result=detect_camera_motion(left,right,marks,search_px=args.search_px)
+            result["before_file"]=str(args.before)
+            result["after_file"]=str(args.after)
+            Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            print(f"Camera v3.3.10: {result['status']}; marcadores={result['n_matches']}/{result['n_anchors']}; dx={result['median_dx_px']}; dy={result['median_dy_px']}; {args.output}")
+            return 0 if result["status"]=="candidate_camera_static" else 2
+        except (OSError,ValueError,TypeError,KeyError,ImportError) as exc:
+            print(f"ERRO check-camera-v3-3-10: {exc}")
+            return 1
+    if args.command == "gate-camera-v3-3-10":
+        from .camera_guard_v3_3_10 import gate_batch
+        try:
+            cam=json.loads(Path(args.camera).read_text(encoding="utf-8-sig"))
+            batch=json.loads(Path(args.batch).read_text(encoding="utf-8-sig"))
+            result=gate_batch(cam,batch)
+            Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            print(f"Camera gate v3.3.10: {result['status']}; selection={result['validated_for_selection']}; {args.output}")
+            return 2
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO gate-camera-v3-3-10: {exc}")
+            return 1
     if args.command == "review-correspondence-v3-3-9":
         from .correspondence_review_v3_3_9 import review_audit
         try:
