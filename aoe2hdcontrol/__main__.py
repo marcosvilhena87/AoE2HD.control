@@ -361,7 +361,40 @@ def main(argv: list[str] | None = None) -> int:
     audit15.add_argument("--world-tolerance", type=float, default=0.02)
     audit15.add_argument("--cursor-tolerance-px", type=float, default=15.0)
     audit15.add_argument("--output", required=True)
+    tr16 = commands.add_parser("audit-controlled-transition-v3-3-16", help="Auditar movimento manual A/B/C de unidade isolada")
+    tr16.add_argument("--a", required=True, help="Revisao v3.3.15 da fase A")
+    tr16.add_argument("--b", required=True, help="Revisao v3.3.15 da fase B")
+    tr16.add_argument("--c", required=True, help="Revisao v3.3.15 da fase C")
+    tr16.add_argument("--min-world-move", type=float, default=1.0)
+    tr16.add_argument("--max-world-return", type=float, default=0.10)
+    tr16.add_argument("--min-cursor-move", type=float, default=15.0)
+    tr16.add_argument("--max-cursor-return", type=float, default=20.0)
+    tr16.add_argument("--output", required=True)
     args = parser.parse_args(argv)
+    if args.command == "audit-controlled-transition-v3-3-16":
+        from .controlled_transition_v3_3_16 import audit_transition
+        try:
+            stages={}
+            inputs=[args.a,args.b,args.c]
+            for phase,path in zip(("A","B","C"),inputs):
+                review=json.loads(Path(path).read_text(encoding="utf-8-sig"))
+                capture_path=review["capture_file"]
+                capture=json.loads(Path(capture_path).read_text(encoding="utf-8-sig"))
+                stages[phase]={"review":review,"capture":capture,
+                    "capture_path":capture_path,"image_path":review["screenshot_file"]}
+            sources=[*inputs]+[e["capture_path"] for e in stages.values()]+[e["image_path"] for e in stages.values()]
+            if Path(args.output).resolve() in {Path(p).resolve() for p in sources} or Path(args.output).exists():
+                raise ValueError("output_overlaps_input_or_exists")
+            result=audit_transition(stages,minimum_world_move=args.min_world_move,
+                return_world_tolerance=args.max_world_return,
+                minimum_cursor_move_px=args.min_cursor_move,
+                return_cursor_tolerance_px=args.max_cursor_return)
+            Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            print(f"Transicao controlada v3.3.16: {result['status']}; motivos={result['reasons']}; {args.output}")
+            return 0 if result["status"]=="candidate_manual_transition_correlated" else 2
+        except (OSError,ValueError,TypeError,KeyError,ImportError,RuntimeError) as exc:
+            print(f"ERRO audit-controlled-transition-v3-3-16: {exc}")
+            return 1
     if args.command == "prepare-identity-v3-3-15":
         from .visual_identity_v3_3_15 import prepare_review
         try:
