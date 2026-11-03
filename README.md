@@ -62,3 +62,7 @@ O [experimento v3.8](docs/global-pair-v3-8.md) mede distância, vetor e orienta�
 ## Calibração experimental mundo → tela v3.9
 
 A [v3.9](docs/world-client-calibration-v3-9.md) coleta, com 8 segundos por etapa, pixels CLIENTE apontados manualmente nos pés de quatro aldeões parados e posições candidatas do mundo. Ajusta uma transformação afim com três referências não colineares e valida no quarto ponto. **Somente leitura:** câmera imóvel informada pelo operador, transformação não certificada e nenhum clique/ordem enviado.
+
+## Compensação candidata da câmera — v3.10
+
+O [ensaio v3.10](docs/camera-translation-v3-10.md) utiliza a calibração fixa da v3.9, mede a translação da projeção com um aldeão estacionário após deslocamento manual da câmera e mede o erro em outro aldeão independente. O programa mantém 8 segundos de retorno ao jogo por etapa, não altera o arquivo v3.9 e **não envia cliques ou ordens**.
