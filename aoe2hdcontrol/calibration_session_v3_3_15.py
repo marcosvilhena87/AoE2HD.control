@@ -64,6 +64,18 @@ def evaluate_session(manifest, *, detector=None, min_holdouts=10, threshold_px=2
             # This flag cannot be upgraded solely from a human assertion.
             if anchor.get("usable") is not True:
                 item_reasons.append("anchor_not_usable")
+        guarded_source = record.get("guarded_source_file")
+        if guarded_source is not None:
+            try:
+                source_report = json.loads(Path(guarded_source).read_text(encoding="utf-8-sig"))
+                if (sha256_file(guarded_source) != record.get("guarded_source_sha256")
+                        or source_report.get("schema") != "hd-guarded-capture-v3.3.12"
+                        or source_report.get("status") != "candidate_capture_accepted"
+                        or source_report.get("anchor") != anchor
+                        or source_report.get("object_id") != oid):
+                    item_reasons.append("guarded_source_mismatch")
+            except (OSError, ValueError, TypeError):
+                item_reasons.append("guarded_source_unreadable")
         role = record.get("role")
         if role not in ("train", "holdout"):
             item_reasons.append("invalid_role")
@@ -130,6 +142,8 @@ def run_manifest(manifest_path, output_dir, *, min_holdouts=10, threshold_px=25.
     manifest["reference_image"] = str((base / manifest["reference_image"]).resolve())
     for record in manifest.get("anchors", []):
         record["camera_image"] = str((base / record["camera_image"]).resolve())
+        if record.get("guarded_source_file"):
+            record["guarded_source_file"] = str((base / record["guarded_source_file"]).resolve())
     report = evaluate_session(manifest, min_holdouts=min_holdouts, threshold_px=threshold_px)
     output_dir = Path(output_dir)
     if output_dir.exists() and any(output_dir.iterdir()):
