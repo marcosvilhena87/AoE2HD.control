@@ -262,7 +262,27 @@ def main(argv: list[str] | None = None) -> int:
     obs.add_argument("--measurement", help="JSON v3.3.5 independente opcional")
     obs.add_argument("--allow-candidates", action="store_true")
     obs.add_argument("--output", required=True)
+    batch = commands.add_parser("validate-projections-v3-3-7", help="Auditar relatorios observacionais v3.3.6 em lote")
+    batch.add_argument("--reports", nargs="+", required=True)
+    batch.add_argument("--exclude-ids", nargs="+", type=int, required=True,
+                       help="IDs usados no ajuste, holdout e validacoes anteriores")
+    batch.add_argument("--min-samples", type=int, default=10)
+    batch.add_argument("--threshold-px", type=float, default=25.0)
+    batch.add_argument("--output", required=True)
     args = parser.parse_args(argv)
+    if args.command == "validate-projections-v3-3-7":
+        from .batch_validation_v3_3_7 import validate_batch
+        try:
+            records=[(p,json.loads(Path(p).read_text(encoding="utf-8-sig"))) for p in args.reports]
+            result=validate_batch(records,excluded_ids=args.exclude_ids,
+                min_samples=args.min_samples,threshold_px=args.threshold_px)
+            Path(args.output).write_text(json.dumps(result,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+            m=result["metrics"]
+            print(f"Validacao v3.3.7: {result['status']}; validos={m['count']}; rejeitados={len(result['rejected'])}; RMSE={m['rmse_px']}; {args.output}")
+            return 0 if result["status"]=="candidate_batch_passed" else 2
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO validate-projections-v3-3-7: {exc}")
+            return 1
     if args.command == "observe-projection-v3-3-6":
         if not args.allow_candidates:
             parser.error("v3.3.6 exige --allow-candidates")
