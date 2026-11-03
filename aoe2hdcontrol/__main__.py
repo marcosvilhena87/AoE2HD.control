@@ -313,7 +313,49 @@ def main(argv: list[str] | None = None) -> int:
     guardcap.add_argument("--image-after", required=True)
     guardcap.add_argument("--allow-candidates", action="store_true")
     guardcap.add_argument("--output", required=True)
+    guarded_projection = commands.add_parser("project-guarded-v3-3-13", help="Projetar medicao protegida v3.3.12 sem cliques")
+    guarded_projection.add_argument("--capture", required=True)
+    guarded_projection.add_argument("--fit", required=True)
+    guarded_projection.add_argument("--client-width", type=int, required=True)
+    guarded_projection.add_argument("--client-height", type=int, required=True)
+    guarded_projection.add_argument("--threshold-px", type=float, default=25.0)
+    guarded_projection.add_argument("--output", required=True)
+    guarded_batch = commands.add_parser("validate-guarded-v3-3-13", help="Auditar lote protegido e preservar capturas bloqueadas")
+    guarded_batch.add_argument("--reports", nargs="+", required=True)
+    guarded_batch.add_argument("--exclude-ids", nargs="*", type=int, default=[])
+    guarded_batch.add_argument("--min-samples", type=int, default=10)
+    guarded_batch.add_argument("--threshold-px", type=float, default=25.0)
+    guarded_batch.add_argument("--output", required=True)
     args = parser.parse_args(argv)
+    if args.command == "project-guarded-v3-3-13":
+        from .guarded_projection_v3_3_13 import project_guarded
+        try:
+            if Path(args.output).resolve() in {Path(args.capture).resolve(),Path(args.fit).resolve()}:
+                raise ValueError("output_overlaps_input")
+            capture=json.loads(Path(args.capture).read_text(encoding="utf-8-sig"))
+            fit=json.loads(Path(args.fit).read_text(encoding="utf-8-sig"))
+            result=project_guarded(capture,fit,client_width=args.client_width,
+                client_height=args.client_height,threshold_px=args.threshold_px)
+            Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            print(f"Projecao protegida v3.3.13: {result['status']}; erro={result['error_px']}; {args.output}")
+            return 0 if result["status"]=="candidate_guarded_projection" else 2
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO project-guarded-v3-3-13: {exc}")
+            return 1
+    if args.command == "validate-guarded-v3-3-13":
+        from .guarded_projection_v3_3_13 import validate_guarded_batch
+        try:
+            if Path(args.output).resolve() in {Path(p).resolve() for p in args.reports}:
+                raise ValueError("output_overlaps_input")
+            entries=[(p,json.loads(Path(p).read_text(encoding="utf-8-sig"))) for p in args.reports]
+            result=validate_guarded_batch(entries,excluded_ids=args.exclude_ids,
+                min_samples=args.min_samples,threshold_px=args.threshold_px)
+            Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            print(f"Lote protegido v3.3.13: {result['status']}; validos={result['metrics']['count']}; bloqueados_ou_rejeitados={len(result['excluded'])}; {args.output}")
+            return 0 if result["status"]=="candidate_numeric_batch_passed" else 2
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO validate-guarded-v3-3-13: {exc}")
+            return 1
     if args.command == "camera-reference-v3-3-12":
         try:
             from datetime import datetime, timezone
