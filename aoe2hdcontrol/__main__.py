@@ -20,6 +20,18 @@ from .selected_objects_v2_5 import inspect_selection as inspect_v25
 from .selected_objects_v2_6 import inspect_selection as inspect_v26
 from .selected_objects_v2_7 import inspect_selection as inspect_v27
 from .selected_objects_v2_8 import make_selection_intent, verify_selection
+from .selected_objects_v2_9 import evaluate_external_transition
+from .selection_investigation_v3_0 import investigate_manual_selection
+from .selection_coordinate_v3_1 import select_by_screen_point, DispatchGuardError
+from .selection_temporal_v3_1_1 import select_with_temporal_verification
+from .position_cursor_probe_v3_2 import capture_position_cursor_series
+from .camera_projection_v3_3 import calibrate_projection, project
+from .projection_audit_v3_3_1 import audit_projection
+from .synchronized_calibration_v3_3_2 import synchronized_anchor, fit_and_holdout
+from .visual_correspondence_v3_3_3 import audit_aba
+from .assisted_visual_v3_3_4 import confirm_anchor, compare_recaptures
+from .screenshot_v3_3_5 import screenshot_client
+from .observation_projection_v3_3_6 import observe_projection
 from .selected_objects_v1_8 import capture as capture_v18, append as append_v18, compare as compare_v18, PHASES as PHASES_V18
 from pathlib import Path
 from . import __version__
@@ -168,7 +180,604 @@ def main(argv: list[str] | None = None) -> int:
     v28.add_argument("--ordered", action="store_true")
     v28.add_argument("--allow-candidates", action="store_true")
     v28.add_argument("--output")
+    v29 = commands.add_parser("compare-selected-v2-9", help="Auditar transicao manual entre snapshots v2.7; nao envia comandos")
+    v29.add_argument("--before", required=True)
+    v29.add_argument("--after", required=True)
+    v29.add_argument("--ids", nargs="+", type=int, required=True)
+    v29.add_argument("--output")
+    v30 = commands.add_parser("investigate-selection-v3-0", help="Capturar antes/depois de seleção MANUAL no mesmo processo")
+    v30.add_argument("--pid", type=int, required=True)
+    v30.add_argument("--ids", nargs="+", type=int, required=True)
+    v30.add_argument("--allow-candidates", action="store_true")
+    v30.add_argument("--output", required=True)
+    v31 = commands.add_parser("select-screen-v3-1", help="Clique experimental por coordenada de tela, confirmado por Object ID")
+    v31.add_argument("--pid", type=int, required=True)
+    v31.add_argument("--id", type=int, required=True)
+    v31.add_argument("--x", type=int, required=True)
+    v31.add_argument("--y", type=int, required=True)
+    v31.add_argument("--allow-candidates", action="store_true")
+    v31.add_argument("--arm", action="store_true")
+    v31.add_argument("--output", required=True)
+    v311 = commands.add_parser("select-screen-v3-1-1", help="Clique unico e verificacao temporal")
+    v311.add_argument("--pid", type=int, required=True)
+    v311.add_argument("--id", type=int, required=True)
+    v311.add_argument("--x", type=int, required=True)
+    v311.add_argument("--y", type=int, required=True)
+    v311.add_argument("--allow-candidates", action="store_true")
+    v311.add_argument("--arm", action="store_true")
+    v311.add_argument("--output", required=True)
+    v32 = commands.add_parser("probe-position-cursor-v3-2", help="Comparar posicao candidata da unidade com cursor do Windows")
+    v32.add_argument("--pid", type=int, required=True)
+    v32.add_argument("--id", type=int, required=True)
+    v32.add_argument("--samples", type=int, default=12)
+    v32.add_argument("--interval", type=float, default=0.5)
+    v32.add_argument("--allow-candidates", action="store_true")
+    v32.add_argument("--output", required=True)
+    v33 = commands.add_parser("calibrate-projection-v3-3", help="Ajustar projecao empirica mundo -> cliente usando CSV de ancoras")
+    v33.add_argument("--csv", required=True)
+    v33.add_argument("--output", required=True)
+    v331 = commands.add_parser("audit-projection-v3-3-1", help="Validacao independente e geometria da projecao")
+    v331.add_argument("--calibration", required=True)
+    v331.add_argument("--holdouts", required=True)
+    v331.add_argument("--output", required=True)
+    v332 = commands.add_parser("capture-anchor-v3-3-2", help="Capturar cursor e unidade em janela temporal curta")
+    v332.add_argument("--pid", type=int, required=True)
+    v332.add_argument("--id", type=int, required=True)
+    v332.add_argument("--allow-candidates", action="store_true")
+    v332.add_argument("--output", required=True)
+    fit332 = commands.add_parser("fit-anchors-v3-3-2", help="Ajustar ancoras e validar em holdout")
+    fit332.add_argument("--anchors", nargs="+", required=True)
+    fit332.add_argument("--holdout-id", type=int, nargs="+", required=True)
+    fit332.add_argument("--output", required=True)
+    aba = commands.add_parser("audit-aba-v3-3-3", help="Auditoria A-B-A sem inferir movimento da camera")
+    aba.add_argument("--first", required=True)
+    aba.add_argument("--middle", required=True)
+    aba.add_argument("--last", required=True)
+    aba.add_argument("--output", required=True)
+    aba.add_argument("--cursor-tolerance-px", type=float, default=15.0)
+    aba.add_argument("--world-tolerance", type=float, default=0.02)
+    confirm = commands.add_parser("confirm-anchor-v3-3-4", help="Anotar confirmacao humana e geometria da janela")
+    confirm.add_argument("--anchor", required=True)
+    confirm.add_argument("--id", type=int, required=True)
+    confirm.add_argument("--operator-confirmed", action="store_true")
+    confirm.add_argument("--window-json", required=True)
+    confirm.add_argument("--output", required=True)
+    repeat = commands.add_parser("compare-assisted-v3-3-4", help="Conferir repetibilidade visual da mesma unidade")
+    repeat.add_argument("--first", required=True)
+    repeat.add_argument("--last", required=True)
+    repeat.add_argument("--output", required=True)
+    visual = commands.add_parser("capture-anchor-v3-3-5", help="Atraso configuravel, ancora e imagem BMP da area cliente")
+    visual.add_argument("--pid", type=int, required=True)
+    visual.add_argument("--id", type=int, required=True)
+    visual.add_argument("--delay", type=float, default=15.0)
+    visual.add_argument("--allow-candidates", action="store_true")
+    visual.add_argument("--output", required=True)
+    visual.add_argument("--image", help="Caminho BMP (padrao: mesmo nome do JSON)")
+    obs = commands.add_parser("observe-projection-v3-3-6", help="Prever ponto cliente sem enviar cliques")
+    obs.add_argument("--pid", type=int, required=True)
+    obs.add_argument("--id", type=int, required=True)
+    obs.add_argument("--fit", required=True)
+    obs.add_argument("--client-width", type=int, required=True)
+    obs.add_argument("--client-height", type=int, required=True)
+    obs.add_argument("--measurement", help="JSON v3.3.5 independente opcional")
+    obs.add_argument("--allow-candidates", action="store_true")
+    obs.add_argument("--output", required=True)
+    batch = commands.add_parser("validate-projections-v3-3-7", help="Auditar relatorios observacionais v3.3.6 em lote")
+    batch.add_argument("--reports", nargs="+", required=True)
+    batch.add_argument("--exclude-ids", nargs="+", type=int, required=True,
+                       help="IDs usados no ajuste, holdout e validacoes anteriores")
+    batch.add_argument("--min-samples", type=int, default=10)
+    batch.add_argument("--threshold-px", type=float, default=25.0)
+    batch.add_argument("--output", required=True)
+    residual = commands.add_parser("audit-residuals-v3-3-8", help="Auditoria visual offline de residuos e repeticoes")
+    residual.add_argument("--reports", nargs="+", required=True)
+    residual.add_argument("--client-width", type=int, default=1536)
+    residual.add_argument("--client-height", type=int, default=864)
+    residual.add_argument("--threshold-px", type=float, default=25.0)
+    residual.add_argument("--output", required=True)
+    residual.add_argument("--svg", required=True, help="Mapa vetorial dos vetores de erro")
+    review = commands.add_parser("review-correspondence-v3-3-9", help="Revisao visual manual e residuos robustos offline")
+    review.add_argument("--audit", required=True, help="JSON v3.3.8")
+    review.add_argument("--reviews", required=True, help="Manifesto de revisao manual JSON")
+    review.add_argument("--output", required=True)
+    camera = commands.add_parser("check-camera-v3-3-10", help="Detectar deslocamento entre dois BMPs por marcos estaticos")
+    camera.add_argument("--before", required=True)
+    camera.add_argument("--after", required=True)
+    camera.add_argument("--anchors", required=True, help="JSON com lista de coordenadas de terreno estatico")
+    camera.add_argument("--search-px", type=int, default=60)
+    camera.add_argument("--output", required=True)
+    guarded = commands.add_parser("gate-camera-v3-3-10", help="Bloqueio conservador do lote segundo a camera")
+    guarded.add_argument("--camera", required=True)
+    guarded.add_argument("--batch", required=True)
+    guarded.add_argument("--output", required=True)
+    robust = commands.add_parser("check-camera-robust-v3-3-11", help="Detectar deslocamento de camera por ORB e RANSAC")
+    robust.add_argument("--before", required=True)
+    robust.add_argument("--after", required=True)
+    robust.add_argument("--output", required=True)
+    robust.add_argument("--max-features", type=int, default=5000)
+    robust.add_argument("--ratio-test", type=float, default=0.75)
+    robust.add_argument("--ransac-threshold-px", type=float, default=3.0)
+    robust_gate = commands.add_parser("gate-camera-robust-v3-3-11", help="Bloqueio conservador baseado na camera robusta")
+    robust_gate.add_argument("--camera", required=True)
+    robust_gate.add_argument("--batch", required=True)
+    robust_gate.add_argument("--output", required=True)
+    refcam = commands.add_parser("camera-reference-v3-3-12", help="Capturar BMP de referencia da camera (somente leitura)")
+    refcam.add_argument("--pid", type=int, required=True)
+    refcam.add_argument("--image", required=True)
+    guardcap = commands.add_parser("capture-camera-guarded-v3-3-12", help="Capturar ancora apenas sob verificacao robusta de camera")
+    guardcap.add_argument("--pid", type=int, required=True)
+    guardcap.add_argument("--id", type=int, required=True)
+    guardcap.add_argument("--delay", type=float, default=20.0)
+    guardcap.add_argument("--reference", required=True)
+    guardcap.add_argument("--image-before", required=True)
+    guardcap.add_argument("--image-after", required=True)
+    guardcap.add_argument("--allow-candidates", action="store_true")
+    guardcap.add_argument("--output", required=True)
+    guarded_projection = commands.add_parser("project-guarded-v3-3-13", help="Projetar medicao protegida v3.3.12 sem cliques")
+    guarded_projection.add_argument("--capture", required=True)
+    guarded_projection.add_argument("--fit", required=True)
+    guarded_projection.add_argument("--client-width", type=int, required=True)
+    guarded_projection.add_argument("--client-height", type=int, required=True)
+    guarded_projection.add_argument("--threshold-px", type=float, default=25.0)
+    guarded_projection.add_argument("--output", required=True)
+    guarded_batch = commands.add_parser("validate-guarded-v3-3-13", help="Auditar lote protegido e preservar capturas bloqueadas")
+    guarded_batch.add_argument("--reports", nargs="+", required=True)
+    guarded_batch.add_argument("--exclude-ids", nargs="*", type=int, default=[])
+    guarded_batch.add_argument("--min-samples", type=int, default=10)
+    guarded_batch.add_argument("--threshold-px", type=float, default=25.0)
+    guarded_batch.add_argument("--output", required=True)
+    bindcam = commands.add_parser("bind-calibration-camera-v3-3-14", help="Vincular fit e BMP de referencia por SHA-256")
+    bindcam.add_argument("--fit", required=True)
+    bindcam.add_argument("--reference", required=True)
+    bindcam.add_argument("--provenance", required=True, choices=["contemporaneous_operator_attested","legacy_unverified"])
+    bindcam.add_argument("--note", default="")
+    bindcam.add_argument("--output", required=True)
+    bound = commands.add_parser("project-camera-bound-v3-3-14", help="Projecao com camera de calibracao vinculada")
+    bound.add_argument("--capture", required=True)
+    bound.add_argument("--fit", required=True)
+    bound.add_argument("--binding", required=True)
+    bound.add_argument("--calibration-reference", required=True)
+    bound.add_argument("--client-width", type=int, required=True)
+    bound.add_argument("--client-height", type=int, required=True)
+    bound.add_argument("--threshold-px", type=float, default=25.0)
+    bound.add_argument("--output", required=True)
+    bound.add_argument("--overlay", required=True)
     args = parser.parse_args(argv)
+    if args.command == "bind-calibration-camera-v3-3-14":
+        from .calibration_camera_v3_3_14 import bind_calibration
+        try:
+            sources={Path(args.fit).resolve(),Path(args.reference).resolve()}
+            if Path(args.output).resolve() in sources or Path(args.output).exists():
+                raise ValueError("output_overlaps_input_or_exists")
+            result=bind_calibration(args.fit,args.reference,
+                provenance=args.provenance,operator_note=args.note)
+            Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            print(f"Vinculo v3.3.14: {result['verification']}; {args.output}")
+            return 0
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO bind-calibration-camera-v3-3-14: {exc}")
+            return 1
+    if args.command == "project-camera-bound-v3-3-14":
+        from .calibration_camera_v3_3_14 import camera_bound_projection,render_overlay
+        try:
+            capture=json.loads(Path(args.capture).read_text(encoding="utf-8-sig"))
+            fit=json.loads(Path(args.fit).read_text(encoding="utf-8-sig"))
+            binding=json.loads(Path(args.binding).read_text(encoding="utf-8-sig"))
+            reference=capture.get("reference_image")
+            before=(capture.get("before_image") or {}).get("path")
+            if not reference or not before:
+                raise ValueError("capture_missing_reference_or_pre_image")
+            paths=[args.capture,args.fit,args.binding,args.calibration_reference,reference,before]
+            outputs={Path(args.output).resolve(),Path(args.overlay).resolve()}
+            if len(outputs)!=2 or outputs.intersection({Path(p).resolve() for p in paths}) or any(p.exists() for p in outputs):
+                raise ValueError("outputs_overlap_input_or_exist")
+            report=camera_bound_projection(capture,fit,binding,fit_path=args.fit,
+                reference_path=args.calibration_reference,capture_reference_path=reference,
+                capture_before_path=before,client_width=args.client_width,
+                client_height=args.client_height,threshold_px=args.threshold_px)
+            # Even blocked reports get a visual overlay for human diagnosis.
+            overlay=render_overlay(report,before,args.overlay)
+            report["overlay"]=overlay
+            Path(args.output).write_text(json.dumps(report,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            print(f"Camera/calibracao v3.3.14: {report['status']}; erro={report['error_px']}; {args.output}; {args.overlay}")
+            return 0 if report["status"]=="candidate_bound_projection" else 2
+        except (OSError,ValueError,TypeError,KeyError,RuntimeError,ImportError) as exc:
+            print(f"ERRO project-camera-bound-v3-3-14: {exc}")
+            return 1
+    if args.command == "project-guarded-v3-3-13":
+        from .guarded_projection_v3_3_13 import project_guarded
+        try:
+            if Path(args.output).resolve() in {Path(args.capture).resolve(),Path(args.fit).resolve()}:
+                raise ValueError("output_overlaps_input")
+            capture=json.loads(Path(args.capture).read_text(encoding="utf-8-sig"))
+            fit=json.loads(Path(args.fit).read_text(encoding="utf-8-sig"))
+            result=project_guarded(capture,fit,client_width=args.client_width,
+                client_height=args.client_height,threshold_px=args.threshold_px)
+            Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            print(f"Projecao protegida v3.3.13: {result['status']}; erro={result['error_px']}; {args.output}")
+            return 0 if result["status"]=="candidate_guarded_projection" else 2
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO project-guarded-v3-3-13: {exc}")
+            return 1
+    if args.command == "validate-guarded-v3-3-13":
+        from .guarded_projection_v3_3_13 import validate_guarded_batch
+        try:
+            if Path(args.output).resolve() in {Path(p).resolve() for p in args.reports}:
+                raise ValueError("output_overlaps_input")
+            entries=[(p,json.loads(Path(p).read_text(encoding="utf-8-sig"))) for p in args.reports]
+            result=validate_guarded_batch(entries,excluded_ids=args.exclude_ids,
+                min_samples=args.min_samples,threshold_px=args.threshold_px)
+            Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            print(f"Lote protegido v3.3.13: {result['status']}; validos={result['metrics']['count']}; bloqueados_ou_rejeitados={len(result['excluded'])}; {args.output}")
+            return 0 if result["status"]=="candidate_numeric_batch_passed" else 2
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO validate-guarded-v3-3-13: {exc}")
+            return 1
+    if args.command == "camera-reference-v3-3-12":
+        try:
+            from datetime import datetime, timezone
+            p=Path(args.image)
+            if p.exists():
+                raise ValueError("reference_file_exists_use_a_new_filename")
+            meta=screenshot_client(args.pid,p)
+            print(f"Referencia v3.3.12: {p}; dimensoes={meta['width']}x{meta['height']}; camera nao verificada")
+            return 0
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO camera-reference-v3-3-12: {exc}")
+            return 1
+    if args.command == "capture-camera-guarded-v3-3-12":
+        from .camera_capture_v3_3_12 import capture_guarded
+        try:
+            files=[Path(args.reference),Path(args.image_before),Path(args.image_after),Path(args.output)]
+            if len({p.resolve() for p in files})!=4:
+                raise ValueError("reference_images_and_json_must_be_distinct")
+            if any(p.exists() for p in files[1:]):
+                raise ValueError("output_file_exists_choose_new_paths")
+            if not args.allow_candidates:
+                raise ValueError("v3.3.12_requires_allow_candidates")
+            print(f"Volte ao jogo e posicione o cursor na base da unidade {args.id}; captura controlada em {args.delay:g} s.",flush=True)
+            report=capture_guarded(pid=args.pid,object_id=args.id,delay=args.delay,
+                reference=str(files[0]),before_path=str(files[1]),after_path=str(files[2]),
+                mapping_path=args.mapping_dir,allow_candidates=args.allow_candidates)
+            Path(args.output).write_text(json.dumps(report,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            print(f"Captura v3.3.12: {report['status']}; camera_pre={report['camera_checks']['reference_to_before'] and report['camera_checks']['reference_to_before'].get('status')}; camera_post={report['camera_checks']['reference_to_after'] and report['camera_checks']['reference_to_after'].get('status')}; {args.output}")
+            return 0 if report["status"]=="candidate_capture_accepted" else 2
+        except (OSError,ValueError,TypeError,KeyError,RuntimeError,ImportError) as exc:
+            print(f"ERRO capture-camera-guarded-v3-3-12: {exc}")
+            return 1
+    if args.command == "check-camera-robust-v3-3-11":
+        from .camera_robust_v3_3_11 import detect_robust_camera_motion
+        try:
+            from PIL import Image
+            with Image.open(args.before) as left, Image.open(args.after) as right:
+                result=detect_robust_camera_motion(left,right,max_features=args.max_features,
+                    ratio_test=args.ratio_test,ransac_threshold_px=args.ransac_threshold_px)
+            result["before_file"]=str(args.before)
+            result["after_file"]=str(args.after)
+            Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            print(f"Camera robusta v3.3.11: {result['status']}; pares={result['good_matches']}; inliers={result['inliers']}; dx={result['dx_px']}; dy={result['dy_px']}; {args.output}")
+            return 0 if result["status"]=="candidate_camera_static" else 2
+        except (OSError,ValueError,TypeError,RuntimeError,ImportError) as exc:
+            print(f"ERRO check-camera-robust-v3-3-11: {exc}")
+            return 1
+    if args.command == "gate-camera-robust-v3-3-11":
+        from .camera_robust_v3_3_11 import gate_robust_camera
+        try:
+            camera=json.loads(Path(args.camera).read_text(encoding="utf-8-sig"))
+            batch=json.loads(Path(args.batch).read_text(encoding="utf-8-sig"))
+            result=gate_robust_camera(camera,batch)
+            Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            print(f"Camera robusta gate v3.3.11: {result['status']}; selection={result['validated_for_selection']}; {args.output}")
+            return 2
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO gate-camera-robust-v3-3-11: {exc}")
+            return 1
+    if args.command == "check-camera-v3-3-10":
+        from .camera_guard_v3_3_10 import detect_camera_motion
+        try:
+            from PIL import Image
+            marks=json.loads(Path(args.anchors).read_text(encoding="utf-8-sig"))
+            if not isinstance(marks,list):
+                raise ValueError("anchors must be a JSON list")
+            with Image.open(args.before) as left, Image.open(args.after) as right:
+                result=detect_camera_motion(left,right,marks,search_px=args.search_px)
+            result["before_file"]=str(args.before)
+            result["after_file"]=str(args.after)
+            Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            print(f"Camera v3.3.10: {result['status']}; marcadores={result['n_matches']}/{result['n_anchors']}; dx={result['median_dx_px']}; dy={result['median_dy_px']}; {args.output}")
+            return 0 if result["status"]=="candidate_camera_static" else 2
+        except (OSError,ValueError,TypeError,KeyError,ImportError) as exc:
+            print(f"ERRO check-camera-v3-3-10: {exc}")
+            return 1
+    if args.command == "gate-camera-v3-3-10":
+        from .camera_guard_v3_3_10 import gate_batch
+        try:
+            cam=json.loads(Path(args.camera).read_text(encoding="utf-8-sig"))
+            batch=json.loads(Path(args.batch).read_text(encoding="utf-8-sig"))
+            result=gate_batch(cam,batch)
+            Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            print(f"Camera gate v3.3.10: {result['status']}; selection={result['validated_for_selection']}; {args.output}")
+            return 2
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO gate-camera-v3-3-10: {exc}")
+            return 1
+    if args.command == "review-correspondence-v3-3-9":
+        from .correspondence_review_v3_3_9 import review_audit
+        try:
+            audit=json.loads(Path(args.audit).read_text(encoding="utf-8-sig"))
+            labels=json.loads(Path(args.reviews).read_text(encoding="utf-8-sig"))
+            result=review_audit(audit,labels)
+            Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            print(f"Revisao v3.3.9: observacoes={result['all_observations']['n']}; elegiveis={result['review_eligible_only']['n']}; pendentes={result['flagged_or_unreviewed']['n']}; {args.output}")
+            return 0
+        except (OSError,ValueError,KeyError,TypeError) as exc:
+            print(f"ERRO review-correspondence-v3-3-9: {exc}")
+            return 1
+    if args.command == "audit-residuals-v3-3-8":
+        from .residual_audit_v3_3_8 import audit_residuals, render_svg
+        try:
+            if Path(args.output).resolve()==Path(args.svg).resolve():
+                raise ValueError("JSON e SVG devem ser arquivos distintos")
+            entries=[(p,json.loads(Path(p).read_text(encoding="utf-8-sig"))) for p in args.reports]
+            result=audit_residuals(entries,client_width=args.client_width,
+                client_height=args.client_height,threshold_px=args.threshold_px)
+            Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            Path(args.svg).write_text(render_svg(result),encoding="utf-8")
+            print(f"Auditoria v3.3.8: amostras={len(result['samples'])}; repetidos={len(result['repeated_objects'])}; invalidos={len(result['invalid'])}; {args.output}; {args.svg}")
+            return 0 if result["samples"] and not result["invalid"] else 2
+        except (OSError,ValueError,KeyError,TypeError) as exc:
+            print(f"ERRO audit-residuals-v3-3-8: {exc}")
+            return 1
+    if args.command == "validate-projections-v3-3-7":
+        from .batch_validation_v3_3_7 import validate_batch
+        try:
+            records=[(p,json.loads(Path(p).read_text(encoding="utf-8-sig"))) for p in args.reports]
+            result=validate_batch(records,excluded_ids=args.exclude_ids,
+                min_samples=args.min_samples,threshold_px=args.threshold_px)
+            Path(args.output).write_text(json.dumps(result,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+            m=result["metrics"]
+            print(f"Validacao v3.3.7: {result['status']}; validos={m['count']}; rejeitados={len(result['rejected'])}; RMSE={m['rmse_px']}; {args.output}")
+            return 0 if result["status"]=="candidate_batch_passed" else 2
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO validate-projections-v3-3-7: {exc}")
+            return 1
+    if args.command == "observe-projection-v3-3-6":
+        if not args.allow_candidates:
+            parser.error("v3.3.6 exige --allow-candidates")
+        try:
+            fit=json.loads(Path(args.fit).read_text(encoding="utf-8-sig"))
+            measurement=(json.loads(Path(args.measurement).read_text(encoding="utf-8-sig"))
+                         if args.measurement else None)
+            with WindowsProcessReader(args.pid) as reader:
+                api=HDObjectAPI(reader,mapping_dir(args.mapping_dir),allow_candidates=True)
+                result=observe_projection(api,pid=args.pid,object_id=args.id,fit=fit,
+                    client_width=args.client_width,client_height=args.client_height,
+                    measurement=measurement)
+            Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            p=result["predicted_client"]
+            print(f"Observacao v3.3.6: Object ID={args.id} ponto=({p['x']:.2f}, {p['y']:.2f}) dentro={result['inside_client']}; {args.output}")
+            return 0 if result["inside_client"] else 2
+        except (OSError,ValueError,TypeError,KeyError,ObjectAPIError) as exc:
+            print(f"ERRO observe-projection-v3-3-6: {exc}")
+            return 1
+    if args.command == "capture-anchor-v3-3-5":
+        if not args.allow_candidates:
+            parser.error("v3.3.5 exige --allow-candidates")
+        if not 0 <= args.delay <= 120:
+            parser.error("--delay deve estar entre 0 e 120 segundos")
+        try:
+            import time
+            from datetime import datetime, timezone
+            from .position_cursor_probe_v3_2 import read_cursor_coordinates
+            image_path = Path(args.image) if args.image else Path(args.output).with_suffix(".bmp")
+            if image_path.resolve() == Path(args.output).resolve():
+                raise ValueError("image and JSON paths must differ")
+            print(f"Volte ao jogo e posicione cursor sobre a base da unidade {args.id}; captura em {args.delay:g} s.",flush=True)
+            time.sleep(args.delay)
+            with WindowsProcessReader(args.pid) as reader:
+                api=HDObjectAPI(reader,mapping_dir(args.mapping_dir),allow_candidates=True)
+                anchor=synchronized_anchor(api,pid=args.pid,object_id=args.id)
+                before_image=read_cursor_coordinates(args.pid)
+                image_meta=None
+                image_error=None
+                try:
+                    image_meta=screenshot_client(args.pid,image_path)
+                except (OSError,ValueError) as exc:
+                    image_error=str(exc)
+                after_image=read_cursor_coordinates(args.pid)
+            stable_image=(before_image.get("game_foreground") is True
+                          and after_image.get("game_foreground") is True
+                          and before_image.get("client")==after_image.get("client")
+                          and anchor["cursor_after"].get("client")==before_image.get("client"))
+            usable=bool(anchor["usable"] and stable_image and image_meta is not None)
+            report={"schema":"hd-visual-evidence-v3.3.5",
+                    "timestamp_utc":datetime.now(timezone.utc).isoformat(),
+                    "pid":args.pid,"object_id":args.id,"delay_seconds":args.delay,
+                    "anchor":anchor,"cursor_before_image":before_image,
+                    "cursor_after_image":after_image,
+                    "image":image_meta,"image_error":image_error,
+                    "cursor_stable_across_image":stable_image,
+                    "status":"candidate_visual_evidence" if usable else "inconclusive",
+                    "visual_object_correspondence":"unverified",
+                    "camera_movement":"unknown","dispatch":"not_dispatched",
+                    "note":"Image follows anchor; not atomic. Visually inspect BMP; cursor may not be drawn in GDI screenshot."}
+            Path(args.output).write_text(json.dumps(report,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+            print(f"Evidencia v3.3.5: {report['status']}; JSON={args.output}; BMP={image_path if image_meta else 'indisponivel'}")
+            return 0 if usable else 2
+        except (OSError,ValueError,TypeError,ObjectAPIError) as exc:
+            print(f"ERRO capture-anchor-v3-3-5: {exc}")
+            return 1
+    if args.command == "confirm-anchor-v3-3-4":
+        try:
+            raw=json.loads(Path(args.anchor).read_text(encoding="utf-8-sig"))
+            window=json.loads(Path(args.window_json).read_text(encoding="utf-8-sig"))
+            result=confirm_anchor(raw,confirmed_id=args.id,
+                                  operator_confirmed=args.operator_confirmed,window=window)
+            Path(args.output).write_text(json.dumps(result,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+            print(f"Confirmacao assistida v3.3.4: {result['status']}; {args.output}")
+            return 0
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO confirm-anchor-v3-3-4: {exc}")
+            return 1
+    if args.command == "compare-assisted-v3-3-4":
+        try:
+            first=json.loads(Path(args.first).read_text(encoding="utf-8-sig"))
+            last=json.loads(Path(args.last).read_text(encoding="utf-8-sig"))
+            result=compare_recaptures(first,last)
+            Path(args.output).write_text(json.dumps(result,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+            print(f"Comparacao v3.3.4: {result['status']}; delta={result['cursor_distance_px']:.2f} px")
+            return 0
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO compare-assisted-v3-3-4: {exc}")
+            return 1
+    if args.command == "audit-aba-v3-3-3":
+        try:
+            samples=[json.loads(Path(p).read_text(encoding="utf-8-sig"))
+                     for p in (args.first,args.middle,args.last)]
+            result=audit_aba(*samples,cursor_tolerance_px=args.cursor_tolerance_px,
+                             world_tolerance=args.world_tolerance)
+            Path(args.output).write_text(json.dumps(result,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+            print(f"Auditoria A-B-A v3.3.3: {result['status']}; delta cursor={result['cursor_delta_px']['distance']:.2f} px")
+            return 0
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO audit-aba-v3-3-3: {exc}")
+            return 1
+    if args.command == "capture-anchor-v3-3-2":
+        if not args.allow_candidates:
+            parser.error("v3.3.2 exige --allow-candidates")
+        try:
+            import time
+            with WindowsProcessReader(args.pid) as reader:
+                api = HDObjectAPI(reader, mapping_dir(args.mapping_dir), allow_candidates=True)
+                print("Em 5 segundos, mantenha o cursor PARADO sobre a unidade identificada.")
+                time.sleep(5)
+                result = synchronized_anchor(api,pid=args.pid,object_id=args.id)
+            Path(args.output).write_text(json.dumps(result,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+            print(f"Ancora v3.3.2: {result['status']}; {args.output}")
+            return 0 if result["usable"] else 2
+        except (ObjectAPIError,OSError,ValueError,TypeError) as exc:
+            print(f"ERRO capture-anchor-v3-3-2: {exc}")
+            return 1
+    if args.command == "fit-anchors-v3-3-2":
+        try:
+            anchors=[json.loads(Path(path).read_text(encoding="utf-8-sig")) for path in args.anchors]
+            result=fit_and_holdout(anchors,holdout_ids=args.holdout_id)
+            Path(args.output).write_text(json.dumps(result,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+            print(f"Fit v3.3.2: {result['status']}; RMSE={result['audit']['holdout_rmse_px']:.2f} px")
+            return 0 if result["status"]=="candidate_fit_passed_threshold" else 2
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO fit-anchors-v3-3-2: {exc}")
+            return 1
+    if args.command == "audit-projection-v3-3-1":
+        try:
+            import csv
+            calibration = json.loads(Path(args.calibration).read_text(encoding="utf-8-sig"))
+            with Path(args.holdouts).open(encoding="utf-8-sig",newline="") as fh:
+                holdouts = list(csv.DictReader(fh))
+            result = audit_projection(calibration, holdouts)
+            Path(args.output).write_text(json.dumps(result,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
+            print(f"Auditoria v3.3.1: RMSE independente={result['holdout_rmse_px']:.2f} px; arquivo={args.output}")
+            return 0
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO audit-projection-v3-3-1: {exc}")
+            return 1
+    if args.command == "calibrate-projection-v3-3":
+        try:
+            import csv
+            with Path(args.csv).open(encoding="utf-8-sig",newline="") as fh:
+                pairs = list(csv.DictReader(fh))
+            result = calibrate_projection(pairs)
+            Path(args.output).write_text(json.dumps(result,indent=2,ensure_ascii=False) + "\n",encoding="utf-8")
+            print(f"Calibracao v3.3: RMSE={result['rmse_px']} px; arquivo={args.output}")
+            return 0
+        except (OSError,ValueError,TypeError) as exc:
+            print(f"ERRO calibrate-projection-v3-3: {exc}")
+            return 1
+    if args.command == "probe-position-cursor-v3-2":
+        if not args.allow_candidates:
+            parser.error("v3.2 exige --allow-candidates")
+        try:
+            with WindowsProcessReader(args.pid) as reader:
+                api = HDObjectAPI(reader, mapping_dir(args.mapping_dir), allow_candidates=True)
+                print("Volte ao jogo; movimente o cursor e a unidade durante as amostras.")
+                import time
+                time.sleep(5)
+                result = capture_position_cursor_series(api, pid=args.pid,
+                    object_id=args.id, samples=args.samples, interval=args.interval)
+            Path(args.output).write_text(json.dumps(result,indent=2,ensure_ascii=False) + "\n",encoding="utf-8")
+            print(f"Relatorio v3.2 salvo em {args.output}")
+            return 0
+        except (ObjectAPIError, OSError, ValueError, TypeError) as exc:
+            print(f"ERRO probe-position-cursor-v3-2: {exc}")
+            return 1
+    if args.command == "select-screen-v3-1-1":
+        if not args.allow_candidates or not args.arm:
+            parser.error("v3.1.1 exige --allow-candidates e --arm")
+        try:
+            import time
+            with WindowsProcessReader(args.pid) as reader:
+                api = HDObjectAPI(reader, mapping_dir(args.mapping_dir), allow_candidates=True)
+                print("Volte ao jogo AGORA; clique unico em 5 segundos.")
+                time.sleep(5)
+                result = select_with_temporal_verification(api, pid=args.pid,
+                    object_id=args.id, x=args.x, y=args.y, armed=True)
+            Path(args.output).write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            print(f"Resultado v3.1.1: {result['status']}; relatorio em {args.output}")
+            return 0 if result["match"] else 2
+        except (DispatchGuardError, ObjectAPIError, OSError, ValueError, TypeError) as exc:
+            print(f"ERRO select-screen-v3-1-1: {exc}")
+            return 1
+    if args.command == "select-screen-v3-1":
+        if not args.allow_candidates or not args.arm:
+            parser.error("v3.1 exige --allow-candidates e --arm")
+        try:
+            import time
+            with WindowsProcessReader(args.pid) as reader:
+                api = HDObjectAPI(reader, mapping_dir(args.mapping_dir), allow_candidates=True)
+                print("Retorne ao jogo AGORA; clique automatico unico em 5 segundos.")
+                time.sleep(5)
+                result = select_by_screen_point(api, pid=args.pid,
+                    object_id=args.id, x=args.x, y=args.y, armed=True)
+            Path(args.output).write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            print(f"Resultado v3.1: {result['status']}; relatorio em {args.output}")
+            return 0 if result["match"] else 2
+        except (DispatchGuardError, ObjectAPIError, OSError, ValueError, TypeError) as exc:
+            print(f"ERRO select-screen-v3-1: {exc}")
+            return 1
+    if args.command == "investigate-selection-v3-0":
+        if not args.allow_candidates:
+            parser.error("v3.0 exige --allow-candidates")
+        try:
+            with WindowsProcessReader(args.pid) as reader:
+                api = HDObjectAPI(reader, mapping_dir(args.mapping_dir), allow_candidates=True)
+                def manual_pause():
+                    print("Captura ANTES concluida. Selecione MANUALMENTE o alvo no jogo; volte aqui.")
+                    input("Pressione Enter para realizar a captura DEPOIS: ")
+                result = investigate_manual_selection(api, args.ids,
+                    pause_for_manual_action=manual_pause, pid=args.pid)
+            Path(args.output).write_text(
+                json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            print(f"Investigacao v3.0 gravada em {args.output}; status={result['status']}")
+            return 0 if result["status"] == "external_transition_observed" else 2
+        except (ObjectAPIError, OSError, ValueError, TypeError, EOFError) as exc:
+            print(f"ERRO investigate-selection-v3-0: {exc}")
+            return 1
+    if args.command == "compare-selected-v2-9":
+        try:
+            intent = make_selection_intent(args.ids)
+            before = json.loads(Path(args.before).read_text(encoding="utf-8"))
+            after = json.loads(Path(args.after).read_text(encoding="utf-8"))
+            result = evaluate_external_transition(intent, before, after)
+            payload = json.dumps(result, indent=2, ensure_ascii=False)
+            if args.output:
+                Path(args.output).write_text(payload + "\n", encoding="utf-8")
+                print(f"Comparacao v2.9 gravada em {args.output}")
+            else:
+                print(payload)
+            return 0 if result["status"] == "external_transition_observed" else 2
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            print(f"ERRO compare-selected-v2-9: {exc}")
+            return 1
     if args.command == "selected-v2-8":
         if not args.allow_candidates:
             parser.error("v2.8 exige --allow-candidates")
