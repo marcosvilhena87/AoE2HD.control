@@ -269,7 +269,29 @@ def main(argv: list[str] | None = None) -> int:
     batch.add_argument("--min-samples", type=int, default=10)
     batch.add_argument("--threshold-px", type=float, default=25.0)
     batch.add_argument("--output", required=True)
+    residual = commands.add_parser("audit-residuals-v3-3-8", help="Auditoria visual offline de residuos e repeticoes")
+    residual.add_argument("--reports", nargs="+", required=True)
+    residual.add_argument("--client-width", type=int, default=1536)
+    residual.add_argument("--client-height", type=int, default=864)
+    residual.add_argument("--threshold-px", type=float, default=25.0)
+    residual.add_argument("--output", required=True)
+    residual.add_argument("--svg", required=True, help="Mapa vetorial dos vetores de erro")
     args = parser.parse_args(argv)
+    if args.command == "audit-residuals-v3-3-8":
+        from .residual_audit_v3_3_8 import audit_residuals, render_svg
+        try:
+            if Path(args.output).resolve()==Path(args.svg).resolve():
+                raise ValueError("JSON e SVG devem ser arquivos distintos")
+            entries=[(p,json.loads(Path(p).read_text(encoding="utf-8-sig"))) for p in args.reports]
+            result=audit_residuals(entries,client_width=args.client_width,
+                client_height=args.client_height,threshold_px=args.threshold_px)
+            Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            Path(args.svg).write_text(render_svg(result),encoding="utf-8")
+            print(f"Auditoria v3.3.8: amostras={len(result['samples'])}; repetidos={len(result['repeated_objects'])}; invalidos={len(result['invalid'])}; {args.output}; {args.svg}")
+            return 0 if result["samples"] and not result["invalid"] else 2
+        except (OSError,ValueError,KeyError,TypeError) as exc:
+            print(f"ERRO audit-residuals-v3-3-8: {exc}")
+            return 1
     if args.command == "validate-projections-v3-3-7":
         from .batch_validation_v3_3_7 import validate_batch
         try:
