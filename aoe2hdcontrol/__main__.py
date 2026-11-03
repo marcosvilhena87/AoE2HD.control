@@ -290,7 +290,45 @@ def main(argv: list[str] | None = None) -> int:
     guarded.add_argument("--camera", required=True)
     guarded.add_argument("--batch", required=True)
     guarded.add_argument("--output", required=True)
+    robust = commands.add_parser("check-camera-robust-v3-3-11", help="Detectar deslocamento de camera por ORB e RANSAC")
+    robust.add_argument("--before", required=True)
+    robust.add_argument("--after", required=True)
+    robust.add_argument("--output", required=True)
+    robust.add_argument("--max-features", type=int, default=5000)
+    robust.add_argument("--ratio-test", type=float, default=0.75)
+    robust.add_argument("--ransac-threshold-px", type=float, default=3.0)
+    robust_gate = commands.add_parser("gate-camera-robust-v3-3-11", help="Bloqueio conservador baseado na camera robusta")
+    robust_gate.add_argument("--camera", required=True)
+    robust_gate.add_argument("--batch", required=True)
+    robust_gate.add_argument("--output", required=True)
     args = parser.parse_args(argv)
+    if args.command == "check-camera-robust-v3-3-11":
+        from .camera_robust_v3_3_11 import detect_robust_camera_motion
+        try:
+            from PIL import Image
+            with Image.open(args.before) as left, Image.open(args.after) as right:
+                result=detect_robust_camera_motion(left,right,max_features=args.max_features,
+                    ratio_test=args.ratio_test,ransac_threshold_px=args.ransac_threshold_px)
+            result["before_file"]=str(args.before)
+            result["after_file"]=str(args.after)
+            Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            print(f"Camera robusta v3.3.11: {result['status']}; pares={result['good_matches']}; inliers={result['inliers']}; dx={result['dx_px']}; dy={result['dy_px']}; {args.output}")
+            return 0 if result["status"]=="candidate_camera_static" else 2
+        except (OSError,ValueError,TypeError,RuntimeError,ImportError) as exc:
+            print(f"ERRO check-camera-robust-v3-3-11: {exc}")
+            return 1
+    if args.command == "gate-camera-robust-v3-3-11":
+        from .camera_robust_v3_3_11 import gate_robust_camera
+        try:
+            camera=json.loads(Path(args.camera).read_text(encoding="utf-8-sig"))
+            batch=json.loads(Path(args.batch).read_text(encoding="utf-8-sig"))
+            result=gate_robust_camera(camera,batch)
+            Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            print(f"Camera robusta gate v3.3.11: {result['status']}; selection={result['validated_for_selection']}; {args.output}")
+            return 2
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO gate-camera-robust-v3-3-11: {exc}")
+            return 1
     if args.command == "check-camera-v3-3-10":
         from .camera_guard_v3_3_10 import detect_camera_motion
         try:
