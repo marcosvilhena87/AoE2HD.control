@@ -31,6 +31,7 @@ from .synchronized_calibration_v3_3_2 import synchronized_anchor, fit_and_holdou
 from .visual_correspondence_v3_3_3 import audit_aba
 from .assisted_visual_v3_3_4 import confirm_anchor, compare_recaptures
 from .screenshot_v3_3_5 import screenshot_client
+from .observation_projection_v3_3_6 import observe_projection
 from .selected_objects_v1_8 import capture as capture_v18, append as append_v18, compare as compare_v18, PHASES as PHASES_V18
 from pathlib import Path
 from . import __version__
@@ -252,7 +253,35 @@ def main(argv: list[str] | None = None) -> int:
     visual.add_argument("--allow-candidates", action="store_true")
     visual.add_argument("--output", required=True)
     visual.add_argument("--image", help="Caminho BMP (padrao: mesmo nome do JSON)")
+    obs = commands.add_parser("observe-projection-v3-3-6", help="Prever ponto cliente sem enviar cliques")
+    obs.add_argument("--pid", type=int, required=True)
+    obs.add_argument("--id", type=int, required=True)
+    obs.add_argument("--fit", required=True)
+    obs.add_argument("--client-width", type=int, required=True)
+    obs.add_argument("--client-height", type=int, required=True)
+    obs.add_argument("--measurement", help="JSON v3.3.5 independente opcional")
+    obs.add_argument("--allow-candidates", action="store_true")
+    obs.add_argument("--output", required=True)
     args = parser.parse_args(argv)
+    if args.command == "observe-projection-v3-3-6":
+        if not args.allow_candidates:
+            parser.error("v3.3.6 exige --allow-candidates")
+        try:
+            fit=json.loads(Path(args.fit).read_text(encoding="utf-8-sig"))
+            measurement=(json.loads(Path(args.measurement).read_text(encoding="utf-8-sig"))
+                         if args.measurement else None)
+            with WindowsProcessReader(args.pid) as reader:
+                api=HDObjectAPI(reader,mapping_dir(args.mapping_dir),allow_candidates=True)
+                result=observe_projection(api,pid=args.pid,object_id=args.id,fit=fit,
+                    client_width=args.client_width,client_height=args.client_height,
+                    measurement=measurement)
+            Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            p=result["predicted_client"]
+            print(f"Observacao v3.3.6: Object ID={args.id} ponto=({p['x']:.2f}, {p['y']:.2f}) dentro={result['inside_client']}; {args.output}")
+            return 0 if result["inside_client"] else 2
+        except (OSError,ValueError,TypeError,KeyError,ObjectAPIError) as exc:
+            print(f"ERRO observe-projection-v3-3-6: {exc}")
+            return 1
     if args.command == "capture-anchor-v3-3-5":
         if not args.allow_candidates:
             parser.error("v3.3.5 exige --allow-candidates")
