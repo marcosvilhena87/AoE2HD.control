@@ -58,3 +58,7 @@ O [monitor de movimentação v3.5](docs/movement-telemetry-v3-5.md) amplia a ten
 ## Coordenadas candidatas de duas unidades — v3.8
 
 O [experimento v3.8](docs/global-pair-v3-8.md) mede distância, vetor e orientação matemática candidata entre dois Object IDs, com três leituras independentes e oito segundos para reposicionar a câmera em cada etapa. Somente leitura, sem comandos nativos e sem promover os offsets candidatos a validados.
+
+## Calibração experimental mundo → tela v3.9
+
+A [v3.9](docs/world-client-calibration-v3-9.md) coleta, com 8 segundos por etapa, pixels CLIENTE apontados manualmente nos pés de quatro aldeões parados e posições candidatas do mundo. Ajusta uma transformação afim com três referências não colineares e valida no quarto ponto. **Somente leitura:** câmera imóvel informada pelo operador, transformação não certificada e nenhum clique/ordem enviado.
