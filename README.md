@@ -46,3 +46,7 @@ Antes de testar hipóteses, investigar comportamentos ou implementar funcionalid
 6. v0.6+: módulos, IPC e renderização.
 
 Referência de produto: https://aoe2control.github.io/. Este projeto é uma implementação independente.
+
+## Ensaio de deslocamento assistido v3.4
+
+O módulo `aoe2hdcontrol.movement_v3_4` implementa um único clique direito **assistido por seleção de Object ID já observada**, com guardas de processo em primeiro plano, opt-in explícito e verificação temporal de posições candidatas. **Não é `UnitsMove` nativo, não escreve memória e não prova causalidade.** Consulte [o procedimento experimental](docs/guarded-unit-movement-v3-4.md) antes de executar em partida local/offline.
