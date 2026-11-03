@@ -301,7 +301,51 @@ def main(argv: list[str] | None = None) -> int:
     robust_gate.add_argument("--camera", required=True)
     robust_gate.add_argument("--batch", required=True)
     robust_gate.add_argument("--output", required=True)
+    refcam = commands.add_parser("camera-reference-v3-3-12", help="Capturar BMP de referencia da camera (somente leitura)")
+    refcam.add_argument("--pid", type=int, required=True)
+    refcam.add_argument("--image", required=True)
+    guardcap = commands.add_parser("capture-camera-guarded-v3-3-12", help="Capturar ancora apenas sob verificacao robusta de camera")
+    guardcap.add_argument("--pid", type=int, required=True)
+    guardcap.add_argument("--id", type=int, required=True)
+    guardcap.add_argument("--delay", type=float, default=20.0)
+    guardcap.add_argument("--reference", required=True)
+    guardcap.add_argument("--image-before", required=True)
+    guardcap.add_argument("--image-after", required=True)
+    guardcap.add_argument("--allow-candidates", action="store_true")
+    guardcap.add_argument("--output", required=True)
     args = parser.parse_args(argv)
+    if args.command == "camera-reference-v3-3-12":
+        try:
+            from datetime import datetime, timezone
+            p=Path(args.image)
+            if p.exists():
+                raise ValueError("reference_file_exists_use_a_new_filename")
+            meta=screenshot_client(args.pid,p)
+            print(f"Referencia v3.3.12: {p}; dimensoes={meta['width']}x{meta['height']}; camera nao verificada")
+            return 0
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO camera-reference-v3-3-12: {exc}")
+            return 1
+    if args.command == "capture-camera-guarded-v3-3-12":
+        from .camera_capture_v3_3_12 import capture_guarded
+        try:
+            files=[Path(args.reference),Path(args.image_before),Path(args.image_after),Path(args.output)]
+            if len({p.resolve() for p in files})!=4:
+                raise ValueError("reference_images_and_json_must_be_distinct")
+            if any(p.exists() for p in files[1:]):
+                raise ValueError("output_file_exists_choose_new_paths")
+            if not args.allow_candidates:
+                raise ValueError("v3.3.12_requires_allow_candidates")
+            print(f"Volte ao jogo e posicione o cursor na base da unidade {args.id}; captura controlada em {args.delay:g} s.",flush=True)
+            report=capture_guarded(pid=args.pid,object_id=args.id,delay=args.delay,
+                reference=str(files[0]),before_path=str(files[1]),after_path=str(files[2]),
+                mapping_path=args.mapping_dir,allow_candidates=args.allow_candidates)
+            Path(args.output).write_text(json.dumps(report,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            print(f"Captura v3.3.12: {report['status']}; camera_pre={report['camera_checks']['reference_to_before'] and report['camera_checks']['reference_to_before'].get('status')}; camera_post={report['camera_checks']['reference_to_after'] and report['camera_checks']['reference_to_after'].get('status')}; {args.output}")
+            return 0 if report["status"]=="candidate_capture_accepted" else 2
+        except (OSError,ValueError,TypeError,KeyError,RuntimeError,ImportError) as exc:
+            print(f"ERRO capture-camera-guarded-v3-3-12: {exc}")
+            return 1
     if args.command == "check-camera-robust-v3-3-11":
         from .camera_robust_v3_3_11 import detect_robust_camera_motion
         try:
