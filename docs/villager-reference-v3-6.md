@@ -3,7 +3,7 @@
 Objetivo: medir aproximação do aldeão A a um aldeão B estacionário, preservando a v3.5 e **sem alegar comando nativo por Object ID**.
 
 ## Procedimento
-1. Partida local/offline `AoK HD.exe 5.8.INT`; identifique dois aldeões (Genie Type ID 83), **A e B**, com IDs individuais da mesma sessão. Para obter B, selecione-o sozinho e rode `selected-v2-7`; depois selecione A sozinho e repita.
+1. Partida local/offline `AoK HD.exe 5.8.INT`; identifique dois aldeões (variantes Genie consultadas do catálogo canônico, como 83 masculino e 293 feminino), **A e B**, com IDs individuais da mesma sessão. Para obter B, selecione-o sozinho e rode `selected-v2-7`; depois selecione A sozinho e repita.
 2. Deixe B parado, relativamente longe de A. Selecione somente A.
 3. Identifique visualmente um **ponto de terreno livre adjacente a B** em coordenadas CLIENTE; não clique sobre a unidade B, para evitar interações.
 4. Execute `experiment` com `armed=True`, `offline_confirmed=True`, IDs distintos e coordenadas cliente escolhidas. Use a mesma invocação via script em arquivo adotada na v3.5 (não `input()` dentro de `python -`).
