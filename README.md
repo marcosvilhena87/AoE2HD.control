@@ -54,3 +54,7 @@ O módulo `aoe2hdcontrol.movement_v3_4` implementa um único clique direito **as
 ## Telemetria experimental v3.5
 
 O [monitor de movimentação v3.5](docs/movement-telemetry-v3-5.md) amplia a tentativa assistida da v3.4 com amostras a cada 200 ms por até 5 s, velocidade por intervalo, percurso acumulado, imobilidade candidata e bloqueio por identidade/seleção. A chegada ao destino **não** é inferida; a implementação não fornece `UnitsMove` nativo.
+
+## Coordenadas candidatas de duas unidades — v3.8
+
+O [experimento v3.8](docs/global-pair-v3-8.md) mede distância, vetor e orientação matemática candidata entre dois Object IDs, com três leituras independentes e oito segundos para reposicionar a câmera em cada etapa. Somente leitura, sem comandos nativos e sem promover os offsets candidatos a validados.
