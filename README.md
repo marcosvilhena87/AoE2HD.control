@@ -50,3 +50,7 @@ Referência de produto: https://aoe2control.github.io/. Este projeto é uma impl
 ## Ensaio de deslocamento assistido v3.4
 
 O módulo `aoe2hdcontrol.movement_v3_4` implementa um único clique direito **assistido por seleção de Object ID já observada**, com guardas de processo em primeiro plano, opt-in explícito e verificação temporal de posições candidatas. **Não é `UnitsMove` nativo, não escreve memória e não prova causalidade.** Consulte [o procedimento experimental](docs/guarded-unit-movement-v3-4.md) antes de executar em partida local/offline.
+
+## Telemetria experimental v3.5
+
+O [monitor de movimentação v3.5](docs/movement-telemetry-v3-5.md) amplia a tentativa assistida da v3.4 com amostras a cada 200 ms por até 5 s, velocidade por intervalo, percurso acumulado, imobilidade candidata e bloqueio por identidade/seleção. A chegada ao destino **não** é inferida; a implementação não fornece `UnitsMove` nativo.
