@@ -44,9 +44,10 @@ class Guard(unittest.TestCase):
 
     def test_full(self):
         objs={1:SimpleNamespace(address=100,owner_address=10,genie_type_id=83),
-              2:SimpleNamespace(address=200,owner_address=10,genie_type_id=83)}
+              2:SimpleNamespace(address=200,owner_address=10,genie_type_id=293)}
         api=SimpleNamespace(allow_candidates=True,get_object_by_id=lambda oid:objs[oid])
         with patch("aoe2hdcontrol.villager_reference_v3_6._selection_id"), \
+             patch("aoe2hdcontrol.villager_reference_v3_6.load_catalog", return_value=[{"genie_type_id":"83","nome_pt":"Aldeão"},{"genie_type_id":"293","nome_pt":"Aldeão"}]), \
              patch("aoe2hdcontrol.villager_reference_v3_6._identity_position",
                    side_effect=[p(0,0),p(4,0),p(4,0)]), \
              patch("aoe2hdcontrol.villager_reference_v3_6.monitor",
