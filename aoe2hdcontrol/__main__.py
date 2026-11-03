@@ -342,7 +342,80 @@ def main(argv: list[str] | None = None) -> int:
     bound.add_argument("--threshold-px", type=float, default=25.0)
     bound.add_argument("--output", required=True)
     bound.add_argument("--overlay", required=True)
+    vis15 = commands.add_parser("prepare-identity-v3-3-15", help="Gerar painel da unidade/cursor e formulario de revisao visual")
+    vis15.add_argument("--capture", required=True)
+    vis15.add_argument("--output", required=True)
+    vis15.add_argument("--overlay", required=True)
+    vis15.add_argument("--crop-radius", type=int, default=160)
+    rev15 = commands.add_parser("review-identity-v3-3-15", help="Registrar declaracao manual de identidade visual")
+    rev15.add_argument("--input", required=True)
+    rev15.add_argument("--identity", required=True, choices=["confirmed","rejected","uncertain"])
+    rev15.add_argument("--isolated", action="store_true")
+    rev15.add_argument("--cursor-on-target", action="store_true")
+    rev15.add_argument("--reviewer", required=True)
+    rev15.add_argument("--note", required=True)
+    rev15.add_argument("--output", required=True)
+    audit15 = commands.add_parser("audit-identity-repeat-v3-3-15", help="Comparar duas revisoes e capturas independentes")
+    audit15.add_argument("--first", required=True)
+    audit15.add_argument("--second", required=True)
+    audit15.add_argument("--world-tolerance", type=float, default=0.02)
+    audit15.add_argument("--cursor-tolerance-px", type=float, default=15.0)
+    audit15.add_argument("--output", required=True)
     args = parser.parse_args(argv)
+    if args.command == "prepare-identity-v3-3-15":
+        from .visual_identity_v3_3_15 import prepare_review
+        try:
+            capture=json.loads(Path(args.capture).read_text(encoding="utf-8-sig"))
+            image=(capture.get("before_image") or {}).get("path")
+            if not image:
+                raise ValueError("missing_capture_before_image")
+            sources={Path(args.capture).resolve(),Path(image).resolve()}
+            outputs={Path(args.output).resolve(),Path(args.overlay).resolve()}
+            if len(outputs)!=2 or outputs.intersection(sources) or any(p.exists() for p in outputs):
+                raise ValueError("output_overlaps_input_or_exists")
+            result=prepare_review(capture,capture_path=args.capture,
+                screenshot_path=image,output_image=args.overlay,crop_radius=args.crop_radius)
+            Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            print(f"Revisao v3.3.15: {result['status']}; {args.output}; {args.overlay}")
+            return 0
+        except (OSError,ValueError,TypeError,KeyError,ImportError) as exc:
+            print(f"ERRO prepare-identity-v3-3-15: {exc}")
+            return 1
+    if args.command == "review-identity-v3-3-15":
+        from .visual_identity_v3_3_15 import adjudicate_review
+        try:
+            if Path(args.output).resolve()==Path(args.input).resolve() or Path(args.output).exists():
+                raise ValueError("output_overlaps_input_or_exists")
+            raw=json.loads(Path(args.input).read_text(encoding="utf-8-sig"))
+            result=adjudicate_review(raw,identity=args.identity,isolated=args.isolated,
+                cursor_on_target=args.cursor_on_target,reviewer=args.reviewer,note=args.note)
+            Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            print(f"Revisao manual v3.3.15: {result['status']}; {args.output}")
+            return 0 if result["status"]=="operator_confirmed_candidate" else 2
+        except (OSError,ValueError,TypeError,KeyError) as exc:
+            print(f"ERRO review-identity-v3-3-15: {exc}")
+            return 1
+    if args.command == "audit-identity-repeat-v3-3-15":
+        from .visual_identity_v3_3_15 import audit_repeat
+        try:
+            entries=[]
+            for path in (args.first,args.second):
+                review=json.loads(Path(path).read_text(encoding="utf-8-sig"))
+                capture=json.loads(Path(review["capture_file"]).read_text(encoding="utf-8-sig"))
+                entries.append((review,capture,review["screenshot_file"]))
+            paths=[args.first,args.second]+[x[0]["capture_file"] for x in entries]+[x[2] for x in entries]
+            if Path(args.output).resolve() in {Path(p).resolve() for p in paths} or Path(args.output).exists():
+                raise ValueError("output_overlaps_input_or_exists")
+            result=audit_repeat(entries[0][0],entries[1][0],
+                first_capture=entries[0][1],second_capture=entries[1][1],
+                first_image=entries[0][2],second_image=entries[1][2],
+                world_tolerance=args.world_tolerance,cursor_tolerance_px=args.cursor_tolerance_px)
+            Path(args.output).write_text(json.dumps(result,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
+            print(f"Correspondencia v3.3.15: {result['status']}; {result['reasons']}; {args.output}")
+            return 0 if result["status"]=="candidate_operator_correspondence_repeatable" else 2
+        except (OSError,ValueError,TypeError,KeyError,ImportError,RuntimeError) as exc:
+            print(f"ERRO audit-identity-repeat-v3-3-15: {exc}")
+            return 1
     if args.command == "bind-calibration-camera-v3-3-14":
         from .calibration_camera_v3_3_14 import bind_calibration
         try:
