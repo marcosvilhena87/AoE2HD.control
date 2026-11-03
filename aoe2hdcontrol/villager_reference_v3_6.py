@@ -7,6 +7,7 @@ import math
 from .movement_v3_4 import _identity_position, _selection_id
 from .movement_v3_5 import monitor, _point
 from .object_api import ObjectAPIError
+from .catalog import load_catalog, mapping_dir
 from .selection_coordinate_v3_1 import DispatchGuardError
 
 SCHEMA = "hd-villager-reference-v3.6"
@@ -81,9 +82,11 @@ def experiment(api, *, pid, mover_id, reference_id, client_x, client_y,
         a.owner_address is None or a.owner_address != b.owner_address
     ):
         raise DispatchGuardError("Distinct owned objects with matching candidate owners required")
-    # Only villagers (Genie ID 83) for this bounded experiment.
-    if a.genie_type_id != 83 or b.genie_type_id != 83:
-        raise DispatchGuardError("Only Genie Type ID 83 tested by this experiment")
+    # Resolve villager variants from canonical mapping, not hardcoded Genie IDs.
+    villager_types = {int(row["genie_type_id"]) for row in load_catalog("genie", mapping_dir())
+                      if row["nome_pt"].strip().casefold() == "aldeão"}
+    if not villager_types or a.genie_type_id not in villager_types or b.genie_type_id not in villager_types:
+        raise DispatchGuardError("Both objects must have villager types listed in canonical mapping")
     a0 = _identity_position(api,mover_id,a)
     b0 = _identity_position(api,reference_id,b)
     if math.dist(_point(a0),_point(b0)) <= tolerance:
